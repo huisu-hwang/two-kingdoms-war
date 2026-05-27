@@ -1393,6 +1393,16 @@ const mp = {
 };
 
 const PEER_PREFIX = 'twokingdomswar-v1-';
+const PEER_CONFIG = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+    ],
+  },
+};
 function sanitizeRoom(s) { return s.trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); }
 
 function roomOverlayShow(step) {
@@ -1463,6 +1473,27 @@ function cleanupMp() {
   if (mp.peer) { try { mp.peer.destroy(); } catch(e){} mp.peer = null; }
   mp.enabled = false; mp.role = null; mp.connected = false; mp.roomName = null;
   mp.lastBroadcast = 0; mp.pendingAction = null;
+  mpGameStarted = false;
+}
+
+function attachConnHandlers(conn, isHost) {
+  // 데이터 핸들러 먼저 등록 (open 이벤트보다 먼저 도착할 수 있음)
+  conn.on('data', isHost ? handleClientMsg : handleHostMsg);
+  conn.on('close', handleDisconnect);
+  conn.on('error', err => setRoomStatus('연결 오류: ' + (err.type || err.message || ''), true));
+}
+
+function hostOnConnReady(conn) {
+  if (mp.connected) return;
+  mp.connected = true;
+  setRoomStatus('✓ 연결됨! 게임 시작합니다');
+  startMpGame('host');
+}
+function clientOnConnReady(conn) {
+  if (mp.connected) return;
+  mp.connected = true;
+  setRoomStatus('✓ 연결됨! 호스트 동기화 대기...');
+  // 게임 시작은 호스트의 첫 'state' broadcast 수신 시 (handleHostMsg에서 처리)
 }
 
 function createRoom(name) {
@@ -1470,25 +1501,27 @@ function createRoom(name) {
   mp.role = 'host';
   mp.enabled = true;
   const peerId = PEER_PREFIX + name;
-  mp.peer = new Peer(peerId, { debug: 1 });
+  mp.peer = new Peer(peerId, PEER_CONFIG);
   mp.peer.on('open', id => {
     setRoomStatus('대기 중... 친구가 입장하면 시작합니다');
   });
   mp.peer.on('connection', conn => {
     mp.conn = conn;
-    conn.on('open', () => {
-      mp.connected = true;
-      setRoomStatus('연결됨! 게임 시작...');
-      setTimeout(() => startMpGame('host'), 400);
-    });
-    conn.on('data', handleClientMsg);
-    conn.on('close', handleDisconnect);
-    conn.on('error', err => setRoomStatus('오류: ' + (err.type || err.message), true));
+    attachConnHandlers(conn, true);
+    // 이미 open이거나 곧 open: 둘 다 처리
+    if (conn.open) hostOnConnReady(conn);
+    else conn.on('open', () => hostOnConnReady(conn));
   });
   mp.peer.on('error', err => {
     const t = err.type || '';
     if (t === 'unavailable-id') setRoomStatus('이미 같은 이름의 방이 있어요. 다른 이름을 써주세요', true);
+    else if (t === 'network' || t === 'server-error' || t === 'socket-error') setRoomStatus('서버 연결 실패 - 잠시 후 다시 시도', true);
     else setRoomStatus('연결 오류: ' + t, true);
+  });
+  mp.peer.on('disconnected', () => {
+    if (mp.peer && !mp.peer.destroyed) {
+      try { mp.peer.reconnect(); } catch(e){}
+    }
   });
 }
 
@@ -1496,28 +1529,36 @@ function joinRoom(name) {
   if (typeof Peer === 'undefined') { setRoomStatus('PeerJS 로드 실패 - 인터넷 확인', true); return; }
   mp.role = 'client';
   mp.enabled = true;
-  mp.peer = new Peer({ debug: 1 });
+  mp.peer = new Peer(PEER_CONFIG);
   mp.peer.on('open', () => {
-    const conn = mp.peer.connect(PEER_PREFIX + name, { reliable: true });
-    mp.conn = conn;
-    conn.on('open', () => {
-      mp.connected = true;
-      setRoomStatus('연결됨! 호스트 응답 대기...');
+    setRoomStatus('방장에 연결 중...');
+    const conn = mp.peer.connect(PEER_PREFIX + name, {
+      reliable: true,
+      serialization: 'json',
     });
-    conn.on('data', handleHostMsg);
-    conn.on('close', handleDisconnect);
-    conn.on('error', err => setRoomStatus('오류: ' + (err.type || err.message), true));
-    // 연결 실패 타임아웃
+    mp.conn = conn;
+    attachConnHandlers(conn, false);
+    if (conn.open) clientOnConnReady(conn);
+    else conn.on('open', () => clientOnConnReady(conn));
+    // 연결 실패 타임아웃 (양방향 channel open 확인까지)
     setTimeout(() => {
-      if (!mp.connected) setRoomStatus('방을 찾을 수 없습니다. 방 이름과 방장 상태를 확인하세요', true);
-    }, 8000);
+      if (!mp.connected) setRoomStatus('연결 실패: 방을 찾을 수 없거나 NAT 차단. 방 이름과 방장 상태를 확인하세요', true);
+    }, 12000);
+    // 호스트의 state 수신 타임아웃 (open은 되었으나 데이터 안 옴)
+    setTimeout(() => {
+      if (mp.connected && !mpGameStarted) setRoomStatus('호스트로부터 데이터를 받지 못했습니다. 다시 시도해주세요', true);
+    }, 18000);
   });
   mp.peer.on('error', err => {
     const t = err.type || '';
-    if (t === 'peer-unavailable') setRoomStatus('해당 방이 존재하지 않습니다', true);
+    if (t === 'peer-unavailable') setRoomStatus('해당 방이 존재하지 않습니다. 방장이 방을 먼저 만들었는지 확인하세요', true);
+    else if (t === 'network' || t === 'server-error' || t === 'socket-error') setRoomStatus('서버 연결 실패 - 잠시 후 다시 시도', true);
     else setRoomStatus('연결 오류: ' + t, true);
   });
 }
+
+// 클라이언트가 호스트의 첫 state를 받으면 게임 시작했는지 추적
+let mpGameStarted = false;
 
 function handleDisconnect() {
   if (!mp.enabled) return;
@@ -1715,11 +1756,15 @@ function applyClientCommand(msg) {
 
 function handleHostMsg(msg) {
   if (!msg || mp.role !== 'client') return;
-  if (msg.type === 'state') applyFullState(msg);
-  else if (msg.type === 'event') {
-    // 즉시 알림 (선택 사항)
-  }
-  else if (msg.type === 'end') {
+  if (msg.type === 'state') {
+    // 첫 state 수신 시 게임 화면으로 진입
+    if (!mpGameStarted) {
+      mpGameStarted = true;
+      setRoomStatus('✓ 동기화 완료 - 게임 시작');
+      startMpGame('client');
+    }
+    applyFullState(msg);
+  } else if (msg.type === 'end') {
     showEndOverlay(msg.winner, msg.reason);
   }
 }
