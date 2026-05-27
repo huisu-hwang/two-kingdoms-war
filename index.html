@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>두 왕국의 전쟁</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #1a1d24; color: #eee; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
+  #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ===== Top bar ===== */
+  #topBar {
+    background: #11141a; border-bottom: 1px solid #2a2f3a;
+    padding: 8px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #topBarRow1 { display: flex; align-items: center; gap: 16px; }
+  #topBarRow2 { display: flex; align-items: center; gap: 12px; }
+  .phaseBox {
+    padding: 6px 14px; border-radius: 4px; font-size: 16px; font-weight: bold;
+    min-width: 220px; text-align: center;
+  }
+  .phaseBox.peace { background: rgba(109,209,109,0.15); border: 1px solid #6dd16d; color: #9ae89a; }
+  .phaseBox.war   { background: rgba(255,106,106,0.18); border: 1px solid #ff6a6a; color: #ff9b9b;
+                    animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: 0.65; } }
+  .phaseBox .count { font-size: 22px; margin-left: 4px; }
+
+  .powerBar {
+    flex: 1; height: 22px; background: #1a1f2a; border: 1px solid #2a2f3a;
+    border-radius: 11px; overflow: hidden; display: flex; position: relative;
+  }
+  .powerBar .blueFill { background: linear-gradient(90deg, #2a4a80, #4a8fff); height: 100%; transition: width 0.4s; }
+  .powerBar .redFill  { background: linear-gradient(90deg, #ff4a4a, #7a2a2a); height: 100%; transition: width 0.4s; }
+  .powerBar .label    {
+    position: absolute; top: 0; bottom: 0; display: flex; align-items: center;
+    font-size: 11px; font-weight: bold; padding: 0 8px; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  }
+  .powerBar .label.left  { left: 0; }
+  .powerBar .label.right { right: 0; }
+
+  .quickStat {
+    padding: 4px 10px; border-radius: 4px; background: #1a1f2a;
+    font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 120px;
+  }
+  .quickStat.blue { border-left: 3px solid #4a8fff; }
+  .quickStat.red  { border-left: 3px solid #ff4a4a; }
+  .quickStat .name { color: #aaa; }
+  .quickStat .val  { color: #fff; font-weight: bold; }
+
+  .spacer { flex: 1; }
+  #topBar button {
+    background: #2a2f3a; color: #ddd; border: 1px solid #3a4050;
+    padding: 6px 12px; cursor: pointer; border-radius: 4px; font-size: 13px;
+  }
+  #topBar button:hover { background: #3a4050; }
+  #topBar button.active { background: #4a7fff; border-color: #6cb3ff; color: #fff; }
+
+  /* ===== Main ===== */
+  #main { flex: 1; display: flex; min-height: 0; }
+  #side {
+    width: 300px; background: #161a22; border-right: 1px solid #2a2f3a;
+    overflow-y: auto; padding: 12px;
+  }
+  #side h3 { font-size: 12px; color: #aaa; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+  #side .section { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #2a2f3a; }
+  #side .res { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; align-items: center; }
+  #side .res b { color: #fff; }
+  #side .res.food b { color: #6dd16d; }
+  #side .res.gold b { color: #ffd76d; }
+  #side .res.iron b { color: #b0b8c8; }
+  #side .res .rate { font-size: 10px; color: #888; margin-left: 4px; }
+  #side .slider { margin: 6px 0; }
+  #side .slider label { display: flex; justify-content: space-between; font-size: 11px; color: #ccc; }
+  #side .slider input { width: 100%; }
+  #side .recruitGrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 4px; }
+  #side .modeRow { display: flex; gap: 4px; margin-bottom: 6px; }
+  #side .modeRow button { flex: 1; font-size: 10px; padding: 4px 0; }
+  #side button {
+    background: #2a2f3a; color: #ddd; border: 1px solid #3a4050;
+    padding: 5px 6px; cursor: pointer; border-radius: 3px; font-size: 12px;
+  }
+  #side button:hover:not(:disabled) { background: #3a4050; }
+  #side button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #side button.sel { background: #4a7fff; border-color: #6cb3ff; color: #fff; }
+  #side .recruitGrid button { padding: 6px 2px; line-height: 1.3; }
+  #side .recruitGrid .name { display: block; font-weight: bold; font-size: 12px; }
+  #side .recruitGrid .cost { display: block; font-size: 9px; color: #aaa; margin-top: 2px; }
+  #side .warBtn {
+    width: 100%; padding: 8px; margin-top: 6px; font-size: 13px; font-weight: bold;
+    background: #6a1f1f; border-color: #a04040; color: #ff9090;
+  }
+  #side .warBtn:hover:not(:disabled) { background: #882828; color: #fff; }
+
+  /* Research */
+  .resItem {
+    background: #1f242e; border: 1px solid #2a2f3a; padding: 6px 8px; border-radius: 4px;
+    margin-bottom: 4px; cursor: pointer; transition: all 0.1s;
+  }
+  .resItem:hover:not(.disabled):not(.done):not(.active) { background: #2a3040; border-color: #4a5060; }
+  .resItem.done { background: #1d3a1d; border-color: #4a8a4a; opacity: 0.7; cursor: default; }
+  .resItem.active { background: #2a3a4a; border-color: #6cb3ff; cursor: default; }
+  .resItem.disabled { opacity: 0.4; cursor: not-allowed; }
+  .resItem .top { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; }
+  .resItem .desc { font-size: 10px; color: #aaa; margin-top: 2px; }
+  .resItem .cost { font-size: 10px; color: #ccc; margin-top: 2px; }
+  .resItem .prog {
+    height: 4px; background: #11141a; margin-top: 4px; border-radius: 2px; overflow: hidden;
+  }
+  .resItem .prog .fill { height: 100%; background: #6cb3ff; transition: width 0.2s; }
+  .resItem.done .badge { color: #6dd16d; }
+
+  /* 2인 모드 진영 토글 */
+  #duoToggle { display: flex; gap: 4px; margin-bottom: 10px; padding: 6px; background: #11141a; border-radius: 4px; }
+  .toggleBtn {
+    flex: 1; padding: 8px 6px; background: #2a2f3a; color: #888;
+    border: 2px solid transparent; border-radius: 3px; cursor: pointer;
+    font-size: 12px; font-weight: bold; transition: all 0.15s;
+  }
+  .toggleBtn:hover { background: #3a4050; color: #fff; }
+  .toggleBtn.active.blueA { background: #4a8fff; border-color: #6cb3ff; color: #fff; }
+  .toggleBtn.active.redA  { background: #ff4a4a; border-color: #ff8585; color: #fff; }
+  .toggleHint { font-size: 10px; color: #666; padding: 0 6px; margin-bottom: 8px; text-align: center; }
+
+  /* Selection info */
+  .selSquadList { font-size: 11px; color: #ddd; }
+  .selSquadList .row { padding: 3px 0; border-bottom: 1px solid #2a2f3a; }
+
+  /* 병종 상성표 */
+  .counterPanel { font-size: 11px; }
+  .counterPanel .crow {
+    display: grid; grid-template-columns: 22px 1fr; gap: 6px;
+    padding: 4px 0; border-bottom: 1px dashed #2a2f3a; align-items: center;
+  }
+  .counterPanel .crow:last-child { border-bottom: none; }
+  .unitBadge {
+    width: 22px; height: 22px; border-radius: 4px;
+    background: #2a2f3a; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 12px;
+  }
+  .unitBadge.infantry { background: #3a4256; }
+  .unitBadge.archer   { background: #6b5821; color: #ffd76d; }
+  .unitBadge.cavalry  { background: #6a3b20; color: #ff9a4a; }
+  .unitBadge.spearman { background: #354a6b; color: #c8d8ff; }
+  .unitBadge.crossbow { background: #6b3f1c; color: #ffaa33; }
+  .unitBadge.catapult { background: #4a2868; color: #cc99ff; }
+  .counterPanel .strong { color: #6dd16d; }
+  .counterPanel .weak   { color: #ff8585; }
+  .counterPanel .neutral { color: #aaa; }
+  .counterPanel .name { color: #fff; font-weight: bold; margin-right: 4px; }
+  .counterPanel .arrow { color: #888; margin: 0 3px; }
+
+  /* ===== Canvas ===== */
+  #canvasWrap { flex: 1; position: relative; background: #2d3340; overflow: hidden; }
+  #game { display: block; cursor: crosshair; }
+
+  /* Event log */
+  #eventLog {
+    position: absolute; bottom: 12px; left: 12px; max-width: 360px;
+    display: flex; flex-direction: column-reverse; gap: 4px; pointer-events: none;
+  }
+  .logItem {
+    background: rgba(0,0,0,0.6); border-left: 3px solid #aaa;
+    padding: 4px 10px; font-size: 12px; color: #eee; border-radius: 0 4px 4px 0;
+    animation: slideIn 0.25s ease-out; max-width: 360px;
+  }
+  .logItem.blue { border-color: #6cb3ff; }
+  .logItem.red  { border-color: #ff8585; }
+  .logItem.war  { border-color: #ff6a6a; color: #ffb0b0; font-weight: bold; }
+  .logItem.research { border-color: #ffd76d; }
+  @keyframes slideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  .help {
+    position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.6);
+    padding: 8px 12px; font-size: 11px; color: #ccc; border-radius: 4px; line-height: 1.6;
+  }
+
+  /* Overlays */
+  .overlay {
+    position: absolute; inset: 0; background: rgba(10,12,16,0.94);
+    display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 100;
+  }
+  .overlay h1 { font-size: 42px; margin-bottom: 8px; letter-spacing: 4px; }
+  .overlay p { color: #aaa; margin-bottom: 24px; font-size: 14px; }
+  .overlay .choices { display: flex; gap: 20px; }
+  .overlay .choices .card {
+    width: 200px; padding: 24px 16px; background: #1a1f2a; border: 2px solid #2a2f3a;
+    border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.15s;
+  }
+  .overlay .choices .card:hover { transform: translateY(-4px); background: #232a38; }
+  .overlay .choices { flex-wrap: wrap; justify-content: center; }
+  .overlay .choices .card.blue:hover { border-color: #6cb3ff; }
+  .overlay .choices .card.red:hover  { border-color: #ff8585; }
+  .overlay .choices .card.spec:hover { border-color: #cccccc; }
+  .overlay .choices .card.duo:hover  { border-color: #c08fff; }
+  .overlay .choices .card.medieval:hover    { border-color: #d4a76a; }
+  .overlay .choices .card.progressive:hover { border-color: #6dd1c6; }
+  .overlay .choices .card.modern:hover      { border-color: #b0b8c8; }
+  .overlay .choices .card { width: 180px; }
+  .overlay .stepBack {
+    margin-top: 16px; padding: 6px 14px; background: transparent;
+    color: #888; border: 1px solid #444; border-radius: 4px; cursor: pointer;
+    font-size: 12px;
+  }
+  .overlay .stepBack:hover { background: #2a2f3a; color: #fff; }
+  .overlay .choices h2 { font-size: 18px; margin-bottom: 6px; }
+  .overlay .choices p { font-size: 12px; margin: 0; color: #aaa; }
+
+  #endOverlay .result { font-size: 64px; font-weight: bold; margin-bottom: 8px; }
+  #endOverlay .result.win  { color: #6dd16d; }
+  #endOverlay .result.lose { color: #ff6a6a; }
+  #endOverlay button {
+    padding: 12px 32px; font-size: 16px; background: #2a2f3a; color: #fff;
+    border: 1px solid #3a4050; border-radius: 4px; cursor: pointer; margin-top: 16px;
+  }
+  #endOverlay button:hover { background: #3a4050; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topBar">
+    <div id="topBarRow1">
+      <div class="phaseBox peace" id="phaseLabel">평화 <span class="count" id="phaseCount">--</span></div>
+      <div class="quickStat blue">
+        <span class="name">청룡</span>
+        <span class="val">인구 <span id="bluePop">0</span>/1000</span>
+        <span class="val">병력 <span id="blueMil">0</span></span>
+        <span class="val">도시 <span id="blueCities">0</span></span>
+      </div>
+      <div class="quickStat red">
+        <span class="name">주작</span>
+        <span class="val">인구 <span id="redPop">0</span>/1000</span>
+        <span class="val">병력 <span id="redMil">0</span></span>
+        <span class="val">도시 <span id="redCities">0</span></span>
+      </div>
+      <div class="spacer"></div>
+      <span style="font-size:12px;color:#aaa">속도</span>
+      <button data-speed="0">||</button>
+      <button data-speed="1" class="active">1x</button>
+      <button data-speed="2">2x</button>
+      <button data-speed="4">4x</button>
+    </div>
+    <div id="topBarRow2">
+      <span style="font-size:11px;color:#aaa;min-width:60px">국력 비교</span>
+      <div class="powerBar">
+        <div class="blueFill" id="bluePower" style="width:50%"></div>
+        <div class="redFill" id="redPower" style="width:50%"></div>
+        <div class="label left"  id="bluePowerLbl">청룡 0</div>
+        <div class="label right" id="redPowerLbl">주작 0</div>
+      </div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="side">
+      <div id="duoToggle" style="display:none"></div>
+      <div id="sideContent"></div>
+    </div>
+    <div id="canvasWrap">
+      <canvas id="game"></canvas>
+      <div id="eventLog"></div>
+      <div class="help">
+        좌클릭 드래그: 부대 선택 · 우클릭(아군 도시): 주둔 · 우클릭(빈 곳/적 도시): 이동/공격<br>
+        Space: 일시정지 · 1/2/4: 속도 · ESC: 선택해제
+      </div>
+      <div class="overlay" id="modeOverlay">
+        <div id="modeStep1">
+          <h1>두 왕국의 전쟁</h1>
+          <p>시대 모드를 선택하세요</p>
+          <div class="choices">
+            <div class="card medieval" data-era="medieval">
+              <h2 style="color:#d4a76a">🏰 중세</h2>
+              <p>검과 활의 시대.<br>중세 병종만 사용합니다.</p>
+            </div>
+            <div class="card progressive" data-era="progressive">
+              <h2 style="color:#6dd1c6">⚔→🏭 발전형</h2>
+              <p>중세에서 시작해 현대화<br>연구로 발전합니다.</p>
+            </div>
+            <div class="card modern" data-era="modern">
+              <h2 style="color:#b0b8c8">🏭 현대</h2>
+              <p>탱크와 전투기 시대.<br>처음부터 현대 병종.</p>
+            </div>
+          </div>
+        </div>
+        <div id="modeStep2" style="display:none">
+          <h1>진영 선택</h1>
+          <p>플레이할 진영을 고르세요</p>
+          <div class="choices">
+            <div class="card blue" data-mode="blue">
+              <h2 style="color:#6cb3ff">청룡 왕국</h2>
+              <p>좌측 왕국의 왕이 되어<br>국가를 통치합니다.</p>
+            </div>
+            <div class="card red" data-mode="red">
+              <h2 style="color:#ff8585">주작 왕국</h2>
+              <p>우측 왕국의 왕이 되어<br>국가를 통치합니다.</p>
+            </div>
+            <div class="card duo" data-mode="duo">
+              <h2 style="color:#c08fff">2인 모드</h2>
+              <p>친구와 함께 두 왕국을<br>번갈아 조작합니다.</p>
+            </div>
+            <div class="card spec" data-mode="spectate">
+              <h2 style="color:#ccc">관전자</h2>
+              <p>두 왕국이 자동으로<br>전쟁하는 것을 관전합니다.</p>
+            </div>
+          </div>
+          <button class="stepBack" id="step2Back">← 시대 다시 선택</button>
+        </div>
+      </div>
+      <div class="overlay" id="endOverlay" style="display:none">
+        <div class="result" id="endResult">승리</div>
+        <p id="endDetail"></p>
+        <button id="restartBtn">다시 시작</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ===================== 설정 =====================
+const W = 1600, H = 900;
+const POP_CAP = 1000;
+const START_POP = 20;
+const PEACE_MIN = 90, PEACE_MAX = 180;       // 평화 기간 (초)
+const WAR_MIN = 60, WAR_MAX = 150;           // 전쟁 기간 (초) — 이후 자동 휴전
+const DEFENDER_DMG_MUL = 1.15;               // 방어 시 공격 +15%
+const DEFENDER_TAKE_MUL = 0.85;              // 방어 시 받는 피해 -15%
+// 위 조합: 1.15 / 0.85 = 1.35배 효율 (9:12 비율과 거의 동등)
+const DEFENSE_BONUS_RADIUS_PAD = 30;         // 도시 반경 + 여유 = 방어 보너스 영역
+
+const UNIT_STATS = {
+  // 중세
+  infantry: { hp: 90,  atk: 9,  rng: 14,  spd: 0.65, radius: 4, cool: 0.9 },
+  archer:   { hp: 55,  atk: 11, rng: 95,  spd: 0.55, radius: 4, cool: 1.0 },
+  cavalry:  { hp: 140, atk: 14, rng: 16,  spd: 1.40, radius: 5, cool: 0.9 },
+  spearman: { hp: 110, atk: 10, rng: 16,  spd: 0.60, radius: 4, cool: 1.0 },
+  crossbow: { hp: 55,  atk: 18, rng: 130, spd: 0.45, radius: 4, cool: 1.4 },
+  catapult: { hp: 80,  atk: 8,  rng: 80,  spd: 0.32, radius: 6, cool: 2.0 },
+  // 현대
+  rifleman: { hp: 95,  atk: 22, rng: 110, spd: 0.70, radius: 4, cool: 0.7 },
+  tank:     { hp: 360, atk: 32, rng: 60,  spd: 0.55, radius: 7, cool: 1.4 },
+  fighter:  { hp: 90,  atk: 28, rng: 180, spd: 2.80, radius: 5, cool: 1.5, flying: true },
+};
+const UNIT_COST = {
+  infantry: { pop: 5,  food: 15, gold: 8,   iron: 14  },
+  archer:   { pop: 5,  food: 12, gold: 18,  iron: 6   },
+  cavalry:  { pop: 5,  food: 24, gold: 30,  iron: 22  },
+  spearman: { pop: 5,  food: 18, gold: 12,  iron: 22  },
+  crossbow: { pop: 5,  food: 12, gold: 28,  iron: 14  },
+  catapult: { pop: 8,  food: 24, gold: 60,  iron: 70  },
+  rifleman: { pop: 5,  food: 18, gold: 35,  iron: 25  },
+  tank:     { pop: 10, food: 35, gold: 90,  iron: 110 },
+  fighter:  { pop: 8,  food: 28, gold: 140, iron: 90  },
+};
+const UNIT_KO    = { infantry:'보병', archer:'궁수', cavalry:'기병', spearman:'창병', crossbow:'석궁병', catapult:'공성병기', rifleman:'소총병', tank:'탱크', fighter:'전투기' };
+const UNIT_BADGE = { infantry:'보',   archer:'궁',   cavalry:'기',   spearman:'창',   crossbow:'석',     catapult:'포',        rifleman:'총',     tank:'탱',  fighter:'공'    };
+const UNIT_DOT   = { infantry:'#ffffff', archer:'#ffd76d', cavalry:'#ff9a4a', spearman:'#c8d8ff', crossbow:'#ffaa33', catapult:'#cc99ff', rifleman:'#cfd6df', tank:'#7ab07a', fighter:'#9adcff' };
+const BASIC_UNITS    = ['infantry','archer','cavalry'];
+const ADVANCED_UNITS = ['spearman','crossbow','catapult'];
+const MODERN_UNITS   = ['rifleman','tank','fighter'];
+const ALL_UNITS = [...BASIC_UNITS, ...ADVANCED_UNITS, ...MODERN_UNITS];
+
+// 병종 상성 (공격자 → 방어자 시 데미지 배율)
+const TYPE_COUNTERS = {
+  // 중세 상성
+  spearman: { cavalry: 2.0 },
+  cavalry:  { archer: 1.5, crossbow: 1.5 },
+  archer:   { infantry: 1.3, spearman: 1.3, fighter: 1.3 },
+  crossbow: { infantry: 1.4, spearman: 1.3, catapult: 1.5, fighter: 1.5 },
+  infantry: { catapult: 1.5 },
+  // 현대 상성
+  rifleman: { infantry: 1.5, spearman: 1.5, cavalry: 1.4, archer: 1.3, crossbow: 1.3 },
+  tank:     { infantry: 1.8, spearman: 1.5, cavalry: 1.8, archer: 1.5, crossbow: 1.3, rifleman: 1.3 },
+  fighter:  { tank: 2.0, cavalry: 1.8, infantry: 1.5, spearman: 1.5, catapult: 2.0, rifleman: 1.4 },
+};
+const MODE_KO = { manual: '수동', aggressive: '공격', defensive: '방어', garrison: '주둔' };
+
+const RESEARCH = {
+  // 기존 능력치 강화
+  ironSword: {
+    name: '철검 단련', desc: '보병 공격력 +4',
+    cost: { gold: 80,  iron: 100 }, time: 35,
+    apply: k => { k.bonuses.atk.infantry += 4; }
+  },
+  longBow: {
+    name: '강궁 제작', desc: '궁수 공격력 +3, 사거리 +25',
+    cost: { gold: 120, iron: 60  }, time: 40,
+    apply: k => { k.bonuses.atk.archer += 3; k.bonuses.rng.archer += 25; }
+  },
+  horseArmor: {
+    name: '마갑 제작', desc: '기병 체력 +50',
+    cost: { gold: 130, iron: 130 }, time: 45,
+    apply: k => { k.bonuses.hp.cavalry += 50; }
+  },
+  steelArmor: {
+    name: '강철 갑옷', desc: '모든 병사 체력 +20%',
+    cost: { gold: 160, iron: 220 }, time: 55,
+    apply: k => { for (const t of ALL_UNITS) k.bonuses.hpMul[t] *= 1.20; }
+  },
+  training: {
+    name: '병사 훈련', desc: '모든 병사 공격력 +20%',
+    cost: { gold: 120, iron: 90  }, time: 50,
+    apply: k => { for (const t of ALL_UNITS) k.bonuses.atkMul[t] *= 1.20; }
+  },
+  // 신병종 잠금 해제
+  unlockSpearman: {
+    name: '창병 양성', desc: '★ 창병 모집 가능 (기병에 2배 피해)',
+    cost: { gold: 130, iron: 100 }, time: 40,
+    apply: k => { k.unlocked.add('spearman'); }
+  },
+  unlockCrossbow: {
+    name: '석궁 제작', desc: '★ 석궁병 모집 가능 (초장거리 사격)',
+    cost: { gold: 180, iron: 130 }, time: 50,
+    apply: k => { k.unlocked.add('crossbow'); }
+  },
+  unlockCatapult: {
+    name: '공성술', desc: '★ 공성병기 모집 가능 (도시 점령 2배)',
+    cost: { gold: 240, iron: 200 }, time: 65,
+    apply: k => { k.unlocked.add('catapult'); }
+  },
+  // 현대 시대
+  modernize: {
+    name: '🏭 현대화', desc: '★★ 현대 시대 진입 — 소총병/탱크/전투기 잠금 해제',
+    cost: { gold: 600, iron: 600 }, time: 120,
+    apply: k => {
+      k.era = 'modern';
+      k.unlocked.add('rifleman');
+      k.unlocked.add('tank');
+      k.unlocked.add('fighter');
+    }
+  },
+};
+
+// ===================== 캔버스 =====================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resizeCanvas() {
+  const wrap = document.getElementById('canvasWrap');
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+
+function worldToScreen(wx, wy) {
+  return [wx * (canvas.width / W), wy * (canvas.height / H)];
+}
+function screenToWorld(sx, sy) {
+  return [sx * (W / canvas.width), sy * (H / canvas.height)];
+}
+
+// ===================== 게임 상태 =====================
+const game = {
+  mode: null,                // 'blue' | 'red' | 'spectate' | 'duo'
+  eraMode: 'progressive',    // 'medieval' | 'progressive' | 'modern'
+  activeSide: 'blue',        // duo 모드에서 현재 조작 중인 진영
+  speed: 1,
+  paused: false,
+  phase: 'peace',
+  peaceLeft: 0,
+  warLeft: 0,
+  time: 0,
+  ended: false,
+  selectedSquads: new Set(),
+  drag: null,
+  recruit: { mode: 'manual' },
+  eventLog: [],
+};
+
+// 현재 사람이 조작 중인 진영 (관전 모드면 null)
+function ourSide() {
+  if (game.mode === 'blue' || game.mode === 'red') return game.mode;
+  if (game.mode === 'duo') return game.activeSide;
+  return null;
+}
+function isAutoKingdom(side) {
+  // AI가 자동 조작하는 진영인가?
+  if (game.mode === 'spectate') return true;
+  if (game.mode === 'duo') return false; // 양쪽 다 사람
+  return side !== game.mode;
+}
+
+// 시대 모드별로 표시할 병종 (모집/상성표)
+function visibleUnits() {
+  if (game.eraMode === 'medieval') return [...BASIC_UNITS, ...ADVANCED_UNITS];
+  return ALL_UNITS;
+}
+
+// 시대 모드를 양 왕국에 적용
+function applyEraMode() {
+  if (game.eraMode === 'modern') {
+    for (const k of [blue, red]) {
+      k.era = 'modern';
+      ['rifleman','tank','fighter'].forEach(t => k.unlocked.add(t));
+      k.research.done.add('modernize');
+      // 현대 시작은 비용이 비싸므로 초기 자원 보너스
+      k.gold += 100;
+      k.iron += 100;
+    }
+  }
+  // medieval / progressive 는 기본 상태 (modern 병종 잠겨 있음)
+}
+
+function makeKingdom(side, color, capX, capY) {
+  return {
+    side, color,
+    capitalX: capX, capitalY: capY,
+    pop: START_POP,
+    food: 100, gold: 80, iron: 50,
+    farmerRatio: 0.55,
+    militaryPop: 0,
+    squads: [],
+    growthAccum: 0,
+    aiTrainTimer: 6,
+    aiResearchTimer: 12,
+    aiCommandTimer: 3,
+    bonuses: {
+      atk:    Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
+      hp:     Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
+      rng:    Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
+      atkMul: Object.fromEntries(ALL_UNITS.map(t => [t, 1])),
+      hpMul:  Object.fromEntries(ALL_UNITS.map(t => [t, 1])),
+    },
+    research: { done: new Set(), current: null },
+    unlocked: new Set(BASIC_UNITS),
+    era: 'medieval',
+  };
+}
+const blue = makeKingdom('blue', '#4a8fff', 100, H / 2);
+const red  = makeKingdom('red',  '#ff4a4a', W - 100, H / 2);
+const sides = { blue, red };
+function enemyOf(side) { return side === 'blue' ? red : blue; }
+
+// ===================== 능력치 헬퍼 =====================
+function uHp(k, type)  { const s = UNIT_STATS[type]; return Math.floor((s.hp + k.bonuses.hp[type]) * k.bonuses.hpMul[type]); }
+function uAtk(k, type) { const s = UNIT_STATS[type]; return (s.atk + k.bonuses.atk[type]) * k.bonuses.atkMul[type]; }
+function uRng(k, type) { const s = UNIT_STATS[type]; return s.rng + k.bonuses.rng[type]; }
+function uSpd(k, type) { return UNIT_STATS[type].spd; }
+function uCool(k, type){ return UNIT_STATS[type].cool; }
+
+// ===================== 도시 =====================
+let cityIdCounter = 0;
+function makeCity(x, y, name, owner) {
+  return {
+    id: ++cityIdCounter,
+    x, y, name,
+    owner, capturer: null, captureProgress: 0,
+    isCapital: false, radius: 30,
+  };
+}
+const cities = [];
+const blueCapital = makeCity(blue.capitalX, blue.capitalY, '청룡성', 'blue');
+const redCapital  = makeCity(red.capitalX,  red.capitalY,  '주작성', 'red');
+blueCapital.isCapital = true; redCapital.isCapital = true;
+blueCapital.radius = 45; redCapital.radius = 45;
+cities.push(blueCapital, redCapital);
+
+const neutralNames = ['금하','은령','동주','서양','남부','북악','옥천','석문','단풍','청계','월포','평원'];
+const cols = 4, rows = 3;
+function rebuildNeutralCities() {
+  let ni = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = 320 + c * ((W - 640) / (cols - 1));
+      const y = 160 + r * ((H - 320) / (rows - 1));
+      const jx = (Math.random() - 0.5) * 70;
+      const jy = (Math.random() - 0.5) * 50;
+      cities.push(makeCity(x + jx, y + jy, neutralNames[ni++], null));
+    }
+  }
+}
+rebuildNeutralCities();
+function ownedCities(side) { return cities.filter(c => c.owner === side); }
+
+// ===================== 부대 / 유닛 =====================
+let squadIdCounter = 0;
+function makeSquad(kingdom, type, count, originCity, mode) {
+  const sq = {
+    id: ++squadIdCounter, side: kingdom.side, type, mode,
+    units: [], targetPos: null, targetCity: null, garrisonedAt: null,
+    selected: false, homeCity: originCity,
+    cohesionX: originCity.x, cohesionY: originCity.y,
+  };
+  const maxHp = uHp(kingdom, type);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    const r = originCity.radius + 8 + Math.random() * 6;
+    sq.units.push({
+      x: originCity.x + Math.cos(a) * r,
+      y: originCity.y + Math.sin(a) * r,
+      hp: maxHp, maxHp,
+      cooldown: 0, alive: true,
+    });
+  }
+  kingdom.squads.push(sq);
+  kingdom.militaryPop += count;
+  return sq;
+}
+function aliveUnits(sq) { return sq.units.filter(u => u.alive); }
+function squadCenter(sq) {
+  const alive = aliveUnits(sq);
+  if (!alive.length) return [sq.cohesionX, sq.cohesionY];
+  let x = 0, y = 0;
+  for (const u of alive) { x += u.x; y += u.y; }
+  return [x / alive.length, y / alive.length];
+}
+
+// ===================== 선택 / 명령 =====================
+function clearSelection() {
+  for (const sq of [...blue.squads, ...red.squads]) sq.selected = false;
+  game.selectedSquads.clear();
+}
+function selectSquad(sq) { sq.selected = true; game.selectedSquads.add(sq.id); }
+function selectedSquadsList() {
+  const ids = game.selectedSquads;
+  return [...blue.squads, ...red.squads].filter(sq => ids.has(sq.id));
+}
+function commandSelected(wx, wy, target) {
+  const our = ourSide();
+  for (const sq of selectedSquadsList()) {
+    if (sq.side !== our) continue;
+    if (target && target.kind === 'city' && target.ref.owner === sq.side) {
+      // 아군 도시 → 주둔
+      sq.garrisonedAt = target.ref;
+      sq.targetPos = { x: target.ref.x, y: target.ref.y };
+      sq.targetCity = null;
+      logEvent(`${UNIT_KO[sq.type]} 부대가 ${target.ref.name}에 주둔합니다`, sq.side);
+    } else {
+      // 이동 / 공격
+      sq.garrisonedAt = null;
+      sq.targetPos = { x: wx, y: wy };
+      sq.targetCity = (target && target.kind === 'city') ? target.ref : null;
+    }
+  }
+}
+
+// ===================== 경제 =====================
+function tickEconomy(k, dt) {
+  const civilians = Math.max(0, k.pop - k.militaryPop);
+  const farmers = Math.floor(civilians * k.farmerRatio);
+  const miners  = civilians - farmers;
+  const cityList = ownedCities(k.side);
+  const cityCount = cityList.length;
+  const hasCapital = cityList.some(c => c.isCapital) ? 1 : 0;
+
+  const foodRate = farmers * 0.10 + cityCount * 0.55 + hasCapital * 0.6;
+  const goldRate = miners  * 0.04 + cityCount * 0.22;
+  const ironRate = miners  * 0.05 + cityCount * 0.18;
+  const foodCons = k.pop * 0.025;
+
+  k._foodRate = foodRate - foodCons;
+  k._goldRate = goldRate;
+  k._ironRate = ironRate;
+
+  k.food += (foodRate - foodCons) * dt;
+  k.gold += goldRate * dt;
+  k.iron += ironRate * dt;
+
+  if (k.food < 0) {
+    k.growthAccum -= dt * 2;
+    k.food = 0;
+  } else if (game.phase === 'peace' && k.pop < POP_CAP && cityCount > 0) {
+    k.growthAccum += dt * (0.35 + cityCount * 0.15);
+  }
+  while (k.growthAccum >= 1 && k.pop < POP_CAP) { k.pop++; k.growthAccum -= 1; }
+  while (k.growthAccum <= -1 && k.pop > 0)      { k.pop--; k.growthAccum += 1; }
+
+  k.food = Math.max(0, k.food);
+  k.gold = Math.max(0, k.gold);
+  k.iron = Math.max(0, k.iron);
+}
+
+function canAfford(k, cost) {
+  return (cost.pop === undefined || k.pop - k.militaryPop >= cost.pop) &&
+         k.food >= (cost.food || 0) && k.gold >= (cost.gold || 0) && k.iron >= (cost.iron || 0);
+}
+function payCost(k, cost) {
+  k.food -= (cost.food || 0); k.gold -= (cost.gold || 0); k.iron -= (cost.iron || 0);
+}
+
+function recruit(k, type, mode) {
+  const cost = UNIT_COST[type];
+  if (!canAfford(k, cost)) return false;
+  const origin = ownedCities(k.side).find(c => c.isCapital) || ownedCities(k.side)[0];
+  if (!origin) return false;
+  payCost(k, cost);
+  makeSquad(k, type, cost.pop, origin, mode);
+  return true;
+}
+
+// ===================== 연구 =====================
+function startResearch(k, id) {
+  if (k.research.done.has(id)) return false;
+  if (k.research.current) return false;
+  const r = RESEARCH[id];
+  if (!canAfford(k, r.cost)) return false;
+  payCost(k, r.cost);
+  k.research.current = { id, progress: 0 };
+  logEvent(`${k.side === 'blue' ? '청룡' : '주작'} - 「${r.name}」 연구 시작`, k.side, 'research');
+  return true;
+}
+function tickResearch(k, dt) {
+  if (!k.research.current) return;
+  const cur = k.research.current;
+  const r = RESEARCH[cur.id];
+  cur.progress += dt;
+  if (cur.progress >= r.time) {
+    r.apply(k);
+    k.research.done.add(cur.id);
+    k.research.current = null;
+    logEvent(`${k.side === 'blue' ? '청룡' : '주작'} - 「${r.name}」 연구 완료!`, k.side, 'research');
+  }
+}
+
+// ===================== 이동 / 전투 =====================
+function distSq(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx*dx + dy*dy; }
+function dist(ax, ay, bx, by)   { return Math.sqrt(distSq(ax, ay, bx, by)); }
+
+function findNearestEnemyUnit(ux, uy, mySide, maxRng) {
+  // 평화 동안은 적과 교전하지 않음
+  if (game.phase === 'peace') return null;
+  const enemies = mySide === 'blue' ? red.squads : blue.squads;
+  let best = null, bestSq = null, bestD = maxRng * maxRng;
+  for (const esq of enemies) for (const eu of esq.units) {
+    if (!eu.alive) continue;
+    const d = distSq(ux, uy, eu.x, eu.y);
+    if (d < bestD) { bestD = d; best = eu; bestSq = esq; }
+  }
+  return best ? { unit: best, squad: bestSq } : null;
+}
+function nearestEnemyCity(side, fromX, fromY) {
+  let best = null, bestD = Infinity;
+  for (const c of cities) {
+    if (c.owner === side) continue;
+    // 평화 동안은 적국 소유 도시 점령 시도 안 함 (중립만 OK)
+    if (game.phase === 'peace' && c.owner) continue;
+    const d = distSq(fromX, fromY, c.x, c.y);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+// 유닛이 자기 진영 도시 방어 영역 안에 있는지
+function inOwnDefenseZone(side, x, y) {
+  for (const c of cities) {
+    if (c.owner !== side) continue;
+    if (distSq(c.x, c.y, x, y) <= (c.radius + DEFENSE_BONUS_RADIUS_PAD) ** 2) return true;
+  }
+  return false;
+}
+
+function tickSquad(sq, dt) {
+  const alive = aliveUnits(sq);
+  if (!alive.length) return;
+  const k = sides[sq.side];
+  const myAtk  = uAtk(k, sq.type);
+  const myRng  = uRng(k, sq.type);
+  const mySpd  = uSpd(k, sq.type);
+  const myCool = uCool(k, sq.type);
+  const isArcher = sq.type === 'archer';
+
+  const [cx, cy] = squadCenter(sq);
+  sq.cohesionX = cx; sq.cohesionY = cy;
+
+  // 주둔 부대인 경우 항상 도시 근처
+  if (sq.garrisonedAt) {
+    if (sq.garrisonedAt.owner !== sq.side) {
+      // 도시 잃음 → 주둔 해제
+      sq.garrisonedAt = null;
+      sq.targetPos = null;
+    }
+  }
+
+  // 자동 AI 목표
+  if (sq.mode !== 'manual' && !sq.garrisonedAt) {
+    if (sq.mode === 'aggressive') {
+      if (!sq.targetCity || sq.targetCity.owner === sq.side) {
+        sq.targetCity = nearestEnemyCity(sq.side, cx, cy);
+      }
+      if (sq.targetCity) sq.targetPos = { x: sq.targetCity.x, y: sq.targetCity.y };
+    } else if (sq.mode === 'defensive') {
+      const enemySquads = sq.side === 'blue' ? red.squads : blue.squads;
+      let threat = null, threatD = 320 * 320;
+      // 평화 동안은 위협 탐지 비활성화 (정찰만 하고 가만히 있음)
+      if (game.phase !== 'peace') {
+        for (const c of ownedCities(sq.side)) {
+          for (const es of enemySquads) {
+            const [ex, ey] = squadCenter(es);
+            const d = distSq(c.x, c.y, ex, ey);
+            if (d < threatD) { threatD = d; threat = { x: ex, y: ey }; }
+          }
+        }
+      }
+      if (threat) sq.targetPos = threat;
+      else {
+        const my = ownedCities(sq.side);
+        if (my.length) {
+          const home = sq.homeCity && sq.homeCity.owner === sq.side ? sq.homeCity : my[0];
+          if (dist(cx, cy, home.x, home.y) > 80) sq.targetPos = { x: home.x, y: home.y };
+          else sq.targetPos = null;
+        }
+      }
+      sq.targetCity = null;
+    }
+  }
+
+  // 주둔 부대 위치 갱신
+  if (sq.garrisonedAt) {
+    sq.targetCity = null;
+    sq.targetPos = { x: sq.garrisonedAt.x, y: sq.garrisonedAt.y };
+  }
+
+  // 유닛별 이동/전투
+  for (const u of alive) {
+    if (u.cooldown > 0) u.cooldown -= dt;
+
+    // 사거리 내 적
+    const hit = findNearestEnemyUnit(u.x, u.y, sq.side, myRng);
+    if (hit) {
+      const enemy = hit.unit;
+      const enemySq = hit.squad;
+      if (isArcher || sq.type === 'crossbow') {
+        const d = dist(u.x, u.y, enemy.x, enemy.y);
+        if (d < myRng * 0.5) {
+          const ang = Math.atan2(u.y - enemy.y, u.x - enemy.x);
+          u.x += Math.cos(ang) * mySpd * dt * 30;
+          u.y += Math.sin(ang) * mySpd * dt * 30;
+        }
+      }
+      if (u.cooldown <= 0) {
+        const attackerInDef = inOwnDefenseZone(sq.side, u.x, u.y);
+        const enemyKingdom = sq.side === 'blue' ? 'red' : 'blue';
+        const defenderInDef = inOwnDefenseZone(enemyKingdom, enemy.x, enemy.y);
+        let dmg = myAtk;
+        // 병종 상성
+        const counterMul = TYPE_COUNTERS[sq.type] && TYPE_COUNTERS[sq.type][enemySq.type];
+        if (counterMul) dmg *= counterMul;
+        if (attackerInDef) dmg *= DEFENDER_DMG_MUL;
+        if (defenderInDef) dmg *= DEFENDER_TAKE_MUL;
+        enemy.hp -= dmg;
+        u.cooldown = myCool;
+        if (enemy.hp <= 0) enemy.alive = false;
+      }
+      continue;
+    }
+
+    // 이동
+    let tx = sq.targetPos ? sq.targetPos.x : null;
+    let ty = sq.targetPos ? sq.targetPos.y : null;
+    if (tx === null) continue;
+
+    // 주둔 시 도시 반경 안에서 분산 위치
+    let ttx = tx, tty = ty;
+    if (sq.garrisonedAt) {
+      const idx = sq.units.indexOf(u);
+      const ang = (idx / sq.units.length) * Math.PI * 2;
+      const r = sq.garrisonedAt.radius * 0.7;
+      ttx = sq.garrisonedAt.x + Math.cos(ang) * r;
+      tty = sq.garrisonedAt.y + Math.sin(ang) * r;
+    } else {
+      const idx = sq.units.indexOf(u);
+      const ang = (idx / sq.units.length) * Math.PI * 2;
+      ttx = tx + Math.cos(ang) * 8;
+      tty = ty + Math.sin(ang) * 8;
+    }
+    const d = dist(u.x, u.y, ttx, tty);
+    if (d > 3) {
+      u.x += ((ttx - u.x) / d) * mySpd * dt * 60;
+      u.y += ((tty - u.y) / d) * mySpd * dt * 60;
+    }
+  }
+
+  // 도시 점령 시도
+  if (sq.targetCity && sq.targetCity.owner !== sq.side) {
+    const c = sq.targetCity;
+    // 평화 동안은 적국 소유 도시 점령 시도 안 함 (중립만 OK)
+    if (game.phase === 'peace' && c.owner) {
+      sq.targetCity = null;
+    } else {
+    const d = dist(cx, cy, c.x, c.y);
+    if (d < c.radius + 20) {
+      const enemySquads = sq.side === 'blue' ? red.squads : blue.squads;
+      let enemyNear = false;
+      for (const es of enemySquads) {
+        for (const eu of es.units) {
+          if (eu.alive && dist(eu.x, eu.y, c.x, c.y) < c.radius + 40) { enemyNear = true; break; }
+        }
+        if (enemyNear) break;
+      }
+      if (!enemyNear) {
+        if (c.capturer !== sq.side) { c.capturer = sq.side; c.captureProgress = 0; }
+        const baseTime = c.isCapital ? 14 : 5;
+        const speedMul = sq.type === 'catapult' ? 2 : 1;
+        c.captureProgress += dt * speedMul / baseTime;
+        if (c.captureProgress >= 1) captureCity(c, sq.side);
+      } else {
+        c.captureProgress = Math.max(0, c.captureProgress - dt * 0.3);
+      }
+    }
+    }
+  }
+}
+
+function captureCity(c, newSide) {
+  const oldOwner = c.owner;
+  c.owner = newSide;
+  c.capturer = null;
+  c.captureProgress = 0;
+  logEvent(`${c.name} ${oldOwner ? '함락' : '점령'}! → ${newSide === 'blue' ? '청룡' : '주작'}`, newSide, c.isCapital ? 'war' : null);
+  if (c.isCapital) {
+    const loser = sides[oldOwner];
+    if (loser) {
+      const before = loser.pop;
+      loser.pop = Math.floor(loser.pop * 0.4);
+      logEvent(`수도 함락으로 ${oldOwner === 'blue' ? '청룡' : '주작'} 인구 ${before - loser.pop} 손실`, oldOwner, 'war');
+    }
+  }
+}
+
+function cleanupSquads(k) {
+  const remaining = [];
+  for (const sq of k.squads) {
+    const alive = aliveUnits(sq);
+    const lost = sq.units.length - alive.length;
+    if (lost > 0) {
+      k.militaryPop = Math.max(0, k.militaryPop - lost);
+      k.pop = Math.max(0, k.pop - lost);
+      sq.units = alive;
+    }
+    if (alive.length === 0) game.selectedSquads.delete(sq.id);
+    else remaining.push(sq);
+  }
+  k.squads = remaining;
+}
+
+// ===================== AI (자동 플레이) =====================
+function aiKingdom(k, dt) {
+  if (!isAutoKingdom(k.side)) return;
+
+  // 농부 조절
+  k.aiTrainTimer -= dt;
+  if (k.aiTrainTimer <= 0) {
+    k.aiTrainTimer = 4 + Math.random() * 3;
+    if (k.food < 60) k.farmerRatio = Math.min(0.9, k.farmerRatio + 0.05);
+    else if (k.food > 250 && k.iron < 80) k.farmerRatio = Math.max(0.25, k.farmerRatio - 0.05);
+    // 모집: 잠금 해제된 병종 풀에서 선택 (기본 병종은 가중치 높임)
+    const pool = [];
+    for (const t of k.unlocked) {
+      const w = BASIC_UNITS.includes(t) ? 2 : 3;
+      for (let i = 0; i < w; i++) pool.push(t);
+    }
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    let mode;
+    if (game.phase === 'peace') {
+      // 평화 시: 중립 도시가 남아 있으면 점령 시도(aggressive), 다 점령했으면 수비
+      const hasNeutral = cities.some(c => !c.owner);
+      mode = hasNeutral ? 'aggressive' : 'defensive';
+    } else {
+      mode = ownedCities(k.side).length < 2 ? 'aggressive' : (Math.random() < 0.75 ? 'aggressive' : 'defensive');
+    }
+    if (canAfford(k, UNIT_COST[t])) recruit(k, t, mode);
+  }
+
+  // 연구
+  k.aiResearchTimer -= dt;
+  if (k.aiResearchTimer <= 0 && !k.research.current) {
+    k.aiResearchTimer = 6 + Math.random() * 6;
+    let candidates = Object.keys(RESEARCH).filter(id => !k.research.done.has(id));
+    // 중세 모드에서는 현대화 연구 후보에서 제외
+    if (game.eraMode === 'medieval') candidates = candidates.filter(id => id !== 'modernize');
+    if (candidates.length) {
+      const id = candidates[Math.floor(Math.random() * candidates.length)];
+      if (canAfford(k, RESEARCH[id].cost)) startResearch(k, id);
+    }
+  }
+}
+
+// ===================== 페이즈 / 승패 =====================
+function startWar(forced = false) {
+  if (game.phase === 'war') return;
+  game.phase = 'war';
+  game.warLeft = WAR_MIN + Math.random() * (WAR_MAX - WAR_MIN);
+  logEvent(forced ? '⚔ 선전포고! 전쟁이 시작되었다!' : '⚔ 전쟁 발발!', null, 'war');
+  for (const k of [blue, red]) {
+    for (const sq of k.squads) if (sq.mode === 'defensive') sq.mode = 'aggressive';
+  }
+}
+
+function startPeace() {
+  if (game.phase === 'peace') return;
+  game.phase = 'peace';
+  game.peaceLeft = PEACE_MIN + Math.random() * (PEACE_MAX - PEACE_MIN);
+  // 점령 진행 중인 도시 리셋
+  for (const c of cities) {
+    if (c.capturer) { c.capturer = null; c.captureProgress = 0; }
+  }
+  // 적국 도시를 노리던 목표만 해제 (중립 도시 점령은 평화 중에도 가능)
+  for (const k of [blue, red]) {
+    for (const sq of k.squads) {
+      if (sq.targetCity && sq.targetCity.owner && sq.targetCity.owner !== sq.side) {
+        sq.targetCity = null;
+        sq.targetPos = null;
+      }
+    }
+  }
+  logEvent(`🕊 휴전 협정! 평화가 찾아왔다 (${Math.ceil(game.peaceLeft)}초)`, null, 'war');
+}
+function checkVictory() {
+  if (game.ended) return;
+  const blueCities = ownedCities('blue').length;
+  const redCities  = ownedCities('red').length;
+  const blueDead = blue.pop <= 0 || blueCities === 0;
+  const redDead  = red.pop  <= 0 || redCities  === 0;
+  if (blueDead && redDead) endGame('무승부', '양국 멸망');
+  else if (blueDead) endGame('red',  blueCities === 0 ? '청룡의 모든 도시가 함락되었습니다' : null);
+  else if (redDead)  endGame('blue', redCities  === 0 ? '주작의 모든 도시가 함락되었습니다' : null);
+}
+function endGame(winnerSide, reasonText) {
+  game.ended = true;
+  const ov = document.getElementById('endOverlay');
+  const result = document.getElementById('endResult');
+  const detail = document.getElementById('endDetail');
+  if (winnerSide === '무승부') {
+    result.textContent = '무승부'; result.className = 'result';
+    detail.textContent = reasonText || '';
+  } else {
+    if (game.mode === 'spectate' || game.mode === 'duo') {
+      result.textContent = (winnerSide === 'blue' ? '청룡 왕국 승리' : '주작 왕국 승리');
+      result.className = 'result win';
+    } else {
+      const won = game.mode === winnerSide;
+      result.textContent = won ? '승리' : '패배';
+      result.className = 'result ' + (won ? 'win' : 'lose');
+    }
+    const loserName = winnerSide === 'blue' ? '주작' : '청룡';
+    detail.textContent = reasonText || `${loserName} 왕국의 인구가 0이 되었습니다.`;
+  }
+  ov.style.display = 'flex';
+}
+
+// ===================== 이벤트 로그 =====================
+function logEvent(text, side, type) {
+  game.eventLog.push({ text, side, type: type || side, time: game.time });
+  if (game.eventLog.length > 30) game.eventLog.shift();
+  renderEventLog();
+}
+function renderEventLog() {
+  const el = document.getElementById('eventLog');
+  // 최근 5개만 표시
+  const last = game.eventLog.slice(-5);
+  el.innerHTML = last.map(e => {
+    const cls = e.type === 'war' ? 'war' : e.type === 'research' ? 'research' : (e.side || '');
+    return `<div class="logItem ${cls}">${e.text}</div>`;
+  }).join('');
+}
+
+// ===================== 입력 =====================
+let mouseDown = false;
+canvas.addEventListener('mousedown', e => {
+  if (game.ended) return;
+  const rect = canvas.getBoundingClientRect();
+  const [wx, wy] = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  if (e.button === 0) {
+    mouseDown = true;
+    game.drag = { x1: wx, y1: wy, x2: wx, y2: wy };
+  } else if (e.button === 2) {
+    if (ourSide() === null) return;
+    const targetCity = cities.find(c => dist(c.x, c.y, wx, wy) < c.radius);
+    commandSelected(wx, wy, targetCity ? { kind: 'city', ref: targetCity } : null);
+  }
+});
+canvas.addEventListener('mousemove', e => {
+  if (!mouseDown) return;
+  const rect = canvas.getBoundingClientRect();
+  const [wx, wy] = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  if (game.drag) { game.drag.x2 = wx; game.drag.y2 = wy; }
+});
+canvas.addEventListener('mouseup', e => {
+  if (e.button !== 0) return;
+  mouseDown = false;
+  if (!game.drag) return;
+  const d = game.drag;
+  const x1 = Math.min(d.x1, d.x2), x2 = Math.max(d.x1, d.x2);
+  const y1 = Math.min(d.y1, d.y2), y2 = Math.max(d.y1, d.y2);
+  const w = x2 - x1, h = y2 - y1;
+  const isClick = (w < 6 && h < 6);
+  clearSelection();
+  const our = ourSide();
+  const all = [...blue.squads, ...red.squads];
+  if (isClick) {
+    let best = null, bestD = 30 * 30;
+    for (const sq of all) {
+      if (sq.side !== our) continue;
+      const [cx, cy] = squadCenter(sq);
+      const dd = distSq(cx, cy, d.x1, d.y1);
+      if (dd < bestD) { bestD = dd; best = sq; }
+    }
+    if (best) selectSquad(best);
+  } else {
+    for (const sq of all) {
+      if (sq.side !== our) continue;
+      const [cx, cy] = squadCenter(sq);
+      if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) selectSquad(sq);
+    }
+  }
+  game.drag = null;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { game.paused = !game.paused; setSpeedActive(); e.preventDefault(); }
+  else if (e.code === 'Digit1') setSpeed(1);
+  else if (e.code === 'Digit2') setSpeed(2);
+  else if (e.code === 'Digit4') setSpeed(4);
+  else if (e.code === 'Escape') clearSelection();
+});
+
+document.querySelectorAll('#topBar button[data-speed]').forEach(b => {
+  b.addEventListener('click', () => {
+    const s = +b.dataset.speed;
+    if (s === 0) game.paused = !game.paused;
+    else { game.paused = false; setSpeed(s); }
+    setSpeedActive();
+  });
+});
+function setSpeed(s) { game.speed = s; setSpeedActive(); }
+function setSpeedActive() {
+  document.querySelectorAll('#topBar button[data-speed]').forEach(b => {
+    const s = +b.dataset.speed;
+    const active = s === 0 ? game.paused : (!game.paused && game.speed === s);
+    b.classList.toggle('active', active);
+  });
+}
+
+// Step 1: 시대 모드 선택
+document.querySelectorAll('#modeStep1 .card').forEach(card => {
+  card.addEventListener('click', () => {
+    game.eraMode = card.dataset.era;
+    document.getElementById('modeStep1').style.display = 'none';
+    document.getElementById('modeStep2').style.display = 'block';
+  });
+});
+// Step 2: 진영 선택
+document.querySelectorAll('#modeStep2 .card').forEach(card => {
+  card.addEventListener('click', () => {
+    game.mode = card.dataset.mode;
+    if (game.mode === 'duo') game.activeSide = 'blue';
+    applyEraMode();
+    document.getElementById('modeOverlay').style.display = 'none';
+    game.peaceLeft = PEACE_MIN + Math.random() * (PEACE_MAX - PEACE_MIN);
+    buildSidePanel();
+    resizeCanvas();
+    const eraName = game.eraMode === 'medieval' ? '🏰 중세' : game.eraMode === 'modern' ? '🏭 현대' : '⚔→🏭 발전형';
+    logEvent(`${eraName} 모드 시작`, null, 'war');
+    if (game.mode === 'duo') {
+      logEvent('2인 모드: TAB 키 또는 상단 버튼으로 진영 전환', null, 'war');
+    }
+    logEvent(`평화 기간 시작 (${Math.ceil(game.peaceLeft)}초 후 전쟁)`, null, 'war');
+  });
+});
+// Step 2 → Step 1 뒤로 가기
+document.getElementById('step2Back').addEventListener('click', () => {
+  document.getElementById('modeStep2').style.display = 'none';
+  document.getElementById('modeStep1').style.display = 'block';
+});
+
+// TAB 키로 진영 전환 (2인 모드)
+window.addEventListener('keydown', e => {
+  if (e.code === 'Tab' && game.mode === 'duo') {
+    e.preventDefault();
+    game.activeSide = game.activeSide === 'blue' ? 'red' : 'blue';
+    clearSelection();
+    buildSidePanel();
+  }
+});
+
+// 다시 시작
+function restartGame() {
+  game.mode = null; game.eraMode = 'progressive'; game.activeSide = 'blue';
+  game.speed = 1; game.paused = false;
+  game.phase = 'peace'; game.peaceLeft = 0; game.warLeft = 0; game.time = 0;
+  game.ended = false; game.selectedSquads.clear(); game.drag = null;
+  game.recruit = { mode: 'manual' };
+  game.eventLog.length = 0;
+  Object.assign(blue, makeKingdom('blue', '#4a8fff', 100, H / 2));
+  Object.assign(red,  makeKingdom('red',  '#ff4a4a', W - 100, H / 2));
+  cities.length = 0; cityIdCounter = 0; squadIdCounter = 0;
+  const bc = makeCity(blue.capitalX, blue.capitalY, '청룡성', 'blue');
+  const rc = makeCity(red.capitalX,  red.capitalY,  '주작성', 'red');
+  bc.isCapital = true; rc.isCapital = true; bc.radius = 45; rc.radius = 45;
+  cities.push(bc, rc);
+  rebuildNeutralCities();
+  document.getElementById('endOverlay').style.display = 'none';
+  document.getElementById('modeOverlay').style.display = 'flex';
+  document.getElementById('modeStep1').style.display = 'block';
+  document.getElementById('modeStep2').style.display = 'none';
+  document.getElementById('sideContent').innerHTML = '';
+  document.getElementById('duoToggle').innerHTML = '';
+  document.getElementById('duoToggle').style.display = 'none';
+  document.getElementById('eventLog').innerHTML = '';
+  setSpeedActive();
+}
+document.getElementById('restartBtn').addEventListener('click', restartGame);
+
+// ===================== 사이드 패널 =====================
+function buildSidePanel() {
+  const c = document.getElementById('sideContent');
+  // 2인 모드: 진영 토글 표시
+  const duoToggle = document.getElementById('duoToggle');
+  if (game.mode === 'duo') {
+    duoToggle.innerHTML = `
+      <button class="toggleBtn ${game.activeSide === 'blue' ? 'active blueA' : ''}" data-side="blue">⚔ 청룡 왕국</button>
+      <button class="toggleBtn ${game.activeSide === 'red'  ? 'active redA'  : ''}" data-side="red">⚔ 주작 왕국</button>
+    `;
+    duoToggle.style.display = 'flex';
+    duoToggle.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        if (game.activeSide === b.dataset.side) return;
+        game.activeSide = b.dataset.side;
+        clearSelection();
+        buildSidePanel();
+      });
+    });
+  } else {
+    duoToggle.style.display = 'none';
+    duoToggle.innerHTML = '';
+  }
+
+  if (game.mode === 'spectate') {
+    c.innerHTML = `
+      <div class="section" id="specBlue"></div>
+      <div class="section" id="specRed"></div>
+      <div class="section">
+        <h3>병종 상성</h3>
+        <div class="counterPanel" id="counterChart"></div>
+      </div>
+      <div class="section">
+        <h3>안내</h3>
+        <p style="font-size:11px;color:#aaa;line-height:1.6">두 왕국이 자동으로 행동합니다.<br>상단에서 속도를 조절하세요.</p>
+      </div>
+    `;
+    buildCounterChart();
+    return;
+  }
+  c.innerHTML = `
+    <div class="section">
+      <h3>왕국 정보</h3>
+      <div class="res"><span>시대</span><b id="eraLbl">🏰 중세</b></div>
+      <div class="res"><span>인구</span><b id="popLbl">0/${POP_CAP}</b></div>
+      <div class="res"><span>병력 / 민간</span><b id="milLbl">0 / 0</b></div>
+      <div class="res"><span>도시 수</span><b id="cityLbl">0</b></div>
+    </div>
+    <div class="section">
+      <h3>자원</h3>
+      <div class="res food"><span>식량</span><span><b id="foodLbl">0</b><span class="rate" id="foodRate"></span></span></div>
+      <div class="res gold"><span>금</span><span><b id="goldLbl">0</b><span class="rate" id="goldRate"></span></span></div>
+      <div class="res iron"><span>철</span><span><b id="ironLbl">0</b><span class="rate" id="ironRate"></span></span></div>
+    </div>
+    <div class="section">
+      <h3>주민 배치</h3>
+      <div class="slider">
+        <label><span>농부 (식량)</span><span id="farmerVal">55%</span></label>
+        <input type="range" id="farmerSlider" min="10" max="90" value="55">
+        <label><span>광부 (금/철)</span><span id="minerVal">45%</span></label>
+      </div>
+    </div>
+    <div class="section">
+      <h3>군대 모집</h3>
+      <div class="modeRow">
+        <button data-recruit-mode="manual" class="sel">수동 조종</button>
+        <button data-recruit-mode="aggressive">자동 공격</button>
+        <button data-recruit-mode="defensive">자동 방어</button>
+      </div>
+      <div class="recruitGrid" id="recruitGrid"></div>
+    </div>
+    <div class="section">
+      <h3>무기 연구</h3>
+      <div id="researchList"></div>
+    </div>
+    <div class="section">
+      <h3>외교</h3>
+      <button class="warBtn" id="warBtn">⚔ 선전포고</button>
+    </div>
+    <div class="section">
+      <h3>병종 상성</h3>
+      <div class="counterPanel" id="counterChart"></div>
+    </div>
+    <div class="section">
+      <h3>선택된 부대</h3>
+      <div id="selInfo" style="font-size:12px;color:#aaa">없음</div>
+    </div>
+  `;
+  const farmer = document.getElementById('farmerSlider');
+  // 슬라이더 초기값을 현재 진영 상태와 동기화
+  farmer.value = Math.round(sides[ourSide()].farmerRatio * 100);
+  document.getElementById('farmerVal').textContent = farmer.value + '%';
+  document.getElementById('minerVal').textContent = (100 - farmer.value) + '%';
+  farmer.addEventListener('input', () => {
+    const v = +farmer.value;
+    document.getElementById('farmerVal').textContent = v + '%';
+    document.getElementById('minerVal').textContent = (100 - v) + '%';
+    sides[ourSide()].farmerRatio = v / 100;
+  });
+  document.querySelectorAll('[data-recruit-mode]').forEach(b => {
+    b.addEventListener('click', () => {
+      game.recruit.mode = b.dataset.recruitMode;
+      document.querySelectorAll('[data-recruit-mode]').forEach(x => x.classList.toggle('sel', x === b));
+    });
+  });
+  document.getElementById('warBtn').addEventListener('click', () => {
+    if (game.phase === 'peace') startWar(true);
+  });
+  rebuildRecruitGrid();
+  rebuildResearchList();
+  buildCounterChart();
+}
+
+// 병종별 상성 요약 (해당 병종이 어떤 적에게 강한가/약한가)
+function counterSummary(type) {
+  const strong = [], weak = [];
+  // 이 병종이 강한 대상
+  if (TYPE_COUNTERS[type]) {
+    for (const [target, mul] of Object.entries(TYPE_COUNTERS[type])) {
+      strong.push({ target, mul });
+    }
+  }
+  // 이 병종에게 강한 다른 병종 (즉, 이 병종이 약한 상대)
+  for (const [atk, table] of Object.entries(TYPE_COUNTERS)) {
+    if (atk === type) continue;
+    if (table[type]) weak.push({ src: atk, mul: table[type] });
+  }
+  return { strong, weak };
+}
+
+function buildCounterChart() {
+  const c = document.getElementById('counterChart');
+  if (!c) return;
+  c.innerHTML = '';
+  for (const t of visibleUnits()) {
+    const { strong, weak } = counterSummary(t);
+    const row = document.createElement('div');
+    row.className = 'crow';
+    const badge = `<div class="unitBadge ${t}">${UNIT_BADGE[t]}</div>`;
+    let info = `<span class="name">${UNIT_KO[t]}</span>`;
+    const parts = [];
+    if (strong.length) {
+      parts.push(`<span class="strong">▲ ${strong.map(s => `${UNIT_KO[s.target]}×${s.mul}`).join(', ')}</span>`);
+    }
+    if (weak.length) {
+      parts.push(`<span class="weak">▼ ${weak.map(w => `${UNIT_KO[w.src]}×${w.mul}`).join(', ')}</span>`);
+    }
+    if (t === 'catapult') parts.push(`<span class="neutral">도시 점령 ×2</span>`);
+    if (!parts.length) parts.push(`<span class="neutral">균형형</span>`);
+    info += `<div style="margin-top:1px">${parts.join(' · ')}</div>`;
+    row.innerHTML = badge + `<div>${info}</div>`;
+    c.appendChild(row);
+  }
+}
+
+const UNLOCK_RES = {
+  spearman: 'unlockSpearman', crossbow: 'unlockCrossbow', catapult: 'unlockCatapult',
+  rifleman: 'modernize', tank: 'modernize', fighter: 'modernize'
+};
+function rebuildRecruitGrid() {
+  const c = document.getElementById('recruitGrid');
+  if (!c || !ourSide()) return;
+  const k = sides[ourSide()];
+  c.innerHTML = '';
+  for (const t of visibleUnits()) {
+    const btn = document.createElement('button');
+    btn.dataset.recruit = t;
+    if (k.unlocked.has(t)) {
+      const co = UNIT_COST[t];
+      btn.innerHTML = `<span class="name">${UNIT_KO[t]}</span><span class="cost">인${co.pop} 식${co.food}<br>금${co.gold} 철${co.iron}</span>`;
+      btn.addEventListener('click', () => {
+        const kk = sides[ourSide()]; // 클릭 시점의 활성 진영 (duo 토글 후에도 안전)
+        if (!recruit(kk, t, game.recruit.mode)) logEvent('자원이 부족합니다', kk.side);
+        else logEvent(`${UNIT_KO[t]} 부대 모집 (${MODE_KO[game.recruit.mode]})`, kk.side);
+      });
+    } else {
+      const resName = RESEARCH[UNLOCK_RES[t]].name;
+      btn.innerHTML = `<span class="name" style="color:#777">🔒 ${UNIT_KO[t]}</span><span class="cost" style="color:#777">${resName} 필요</span>`;
+      btn.disabled = true;
+    }
+    c.appendChild(btn);
+  }
+}
+
+function rebuildResearchList() {
+  const c = document.getElementById('researchList');
+  if (!c || !ourSide()) return;
+  const k = sides[ourSide()];
+  c.innerHTML = '';
+  for (const [id, r] of Object.entries(RESEARCH)) {
+    // 중세 모드에서는 현대화 및 신병종(현대 한정) 관련 연구 숨김
+    if (game.eraMode === 'medieval' && id === 'modernize') continue;
+    const div = document.createElement('div');
+    const done   = k.research.done.has(id);
+    const active = k.research.current && k.research.current.id === id;
+    const can    = canAfford(k, r.cost) && !k.research.current;
+    div.className = 'resItem' + (done ? ' done' : active ? ' active' : (!can ? ' disabled' : ''));
+    const status = done ? '<span class="badge">✓ 완료</span>'
+                 : active ? `<span style="color:#6cb3ff">진행 중</span>`
+                 : '';
+    div.innerHTML = `
+      <div class="top"><span>${r.name}</span>${status}</div>
+      <div class="desc">${r.desc}</div>
+      ${done ? '' : active
+        ? `<div class="prog"><div class="fill" style="width:${Math.floor(100*k.research.current.progress/r.time)}%"></div></div>`
+        : `<div class="cost">비용: 금 ${r.cost.gold}, 철 ${r.cost.iron} · ${r.time}초</div>`}
+    `;
+    if (!done && !active) {
+      div.addEventListener('click', () => {
+        const kk = sides[ourSide()];
+        if (startResearch(kk, id)) rebuildResearchList();
+        else logEvent('자원이 부족하거나 다른 연구가 진행 중입니다', kk.side);
+      });
+    }
+    c.appendChild(div);
+  }
+}
+
+// ===================== 메인 루프 =====================
+let lastT = performance.now();
+function loop(now) {
+  const realDt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  const dt = game.paused ? 0 : realDt * game.speed;
+  if (!game.ended) update(dt);
+  render();
+  updateUI();
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  if (game.mode === null) return;
+  game.time += dt;
+
+  if (game.phase === 'peace') {
+    game.peaceLeft -= dt;
+    if (game.peaceLeft <= 0) startWar(false);
+  } else {
+    game.warLeft -= dt;
+    if (game.warLeft <= 0) startPeace();
+  }
+
+  tickEconomy(blue, dt);
+  tickEconomy(red, dt);
+  tickResearch(blue, dt);
+  tickResearch(red, dt);
+  aiKingdom(blue, dt);
+  aiKingdom(red, dt);
+
+  for (const sq of blue.squads) tickSquad(sq, dt);
+  for (const sq of red.squads)  tickSquad(sq, dt);
+  cleanupSquads(blue);
+  cleanupSquads(red);
+  checkVictory();
+}
+
+// ===================== 렌더 =====================
+function render() {
+  ctx.fillStyle = '#2d3340';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 영토 옅은 색
+  for (const c of cities) {
+    if (!c.owner) continue;
+    const [sx, sy] = worldToScreen(c.x, c.y);
+    const scale = canvas.width / W;
+    ctx.fillStyle = c.owner === 'blue' ? 'rgba(74,143,255,0.10)' : 'rgba(255,74,74,0.10)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, (c.radius + DEFENSE_BONUS_RADIUS_PAD) * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const c of cities) drawCity(c);
+  for (const sq of [...blue.squads, ...red.squads]) drawSquadIndicator(sq);
+  for (const sq of [...blue.squads, ...red.squads]) drawSquadUnits(sq);
+
+  if (game.drag) {
+    const [x1, y1] = worldToScreen(game.drag.x1, game.drag.y1);
+    const [x2, y2] = worldToScreen(game.drag.x2, game.drag.y2);
+    const x = Math.min(x1, x2), y = Math.min(y1, y2);
+    const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+function garrisonAt(city) {
+  if (!city.owner) return [];
+  const list = sides[city.owner].squads;
+  return list.filter(sq => sq.garrisonedAt === city);
+}
+
+function drawCity(c) {
+  const [sx, sy] = worldToScreen(c.x, c.y);
+  const scale = canvas.width / W;
+  const r = c.radius * scale;
+
+  ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.fillStyle = c.owner === 'blue' ? '#2a4a80' : c.owner === 'red' ? '#7a2a2a' : '#3e4452';
+  ctx.fill();
+  ctx.strokeStyle = c.owner === 'blue' ? '#6cb3ff' : c.owner === 'red' ? '#ff8585' : '#888';
+  ctx.lineWidth = 2; ctx.stroke();
+
+  if (c.isCapital) {
+    ctx.fillStyle = '#ffd76d';
+    ctx.beginPath();
+    const tipR = r * 1.25, midR = r * 0.5;
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const rr = i % 2 === 0 ? tipR : midR;
+      const px = sx + Math.cos(a) * rr, py = sy + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.globalAlpha = 0.22; ctx.fill(); ctx.globalAlpha = 1;
+  }
+
+  if (c.captureProgress > 0 && c.capturer) {
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 5, -Math.PI / 2, -Math.PI / 2 + c.captureProgress * Math.PI * 2);
+    ctx.strokeStyle = c.capturer === 'blue' ? '#6cb3ff' : '#ff8585';
+    ctx.lineWidth = 3; ctx.stroke();
+  }
+
+  // 이름
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(c.name, sx, sy + 3);
+
+  // 주둔 병력 배지
+  if (c.owner) {
+    const garr = garrisonAt(c);
+    let total = 0;
+    for (const sq of garr) total += aliveUnits(sq).length;
+    if (total > 0) {
+      const bx = sx + r * 0.75, by = sy - r * 0.75;
+      ctx.fillStyle = '#1a1f2a';
+      ctx.strokeStyle = c.owner === 'blue' ? '#6cb3ff' : '#ff8585';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(bx, by, 11 * scale, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(11 * scale)}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(total, bx, by);
+      ctx.textBaseline = 'alphabetic';
+      // 방패 마크
+      ctx.font = `${Math.round(9 * scale)}px sans-serif`;
+      ctx.fillStyle = c.owner === 'blue' ? '#6cb3ff' : '#ff8585';
+      ctx.fillText('🛡', bx - 14 * scale, by + 3);
+    }
+  }
+}
+
+function drawSquadIndicator(sq) {
+  if (!sq.selected) return;
+  const [cx, cy] = squadCenter(sq);
+  const [sx, sy] = worldToScreen(cx, cy);
+  const scale = canvas.width / W;
+  ctx.strokeStyle = '#ffff66';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(sx, sy, 22 * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (sq.targetPos && !sq.garrisonedAt) {
+    const [tx, ty] = worldToScreen(sq.targetPos.x, sq.targetPos.y);
+    ctx.strokeStyle = 'rgba(255,255,102,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+  }
+}
+
+function drawSquadUnits(sq) {
+  if (sq.garrisonedAt) return; // 도시 안에 있어서 도시가 표시함
+  const stats = UNIT_STATS[sq.type];
+  const scale = canvas.width / W;
+  const baseColor = sq.side === 'blue' ? '#4a8fff' : '#ff4a4a';
+  const dotColor = UNIT_DOT[sq.type] || '#ffffff';
+  const isFlying = !!stats.flying;
+  const isTank = sq.type === 'tank';
+  for (const u of sq.units) {
+    if (!u.alive) continue;
+    const [sx, sy] = worldToScreen(u.x, u.y);
+    const r = stats.radius * scale;
+
+    if (isFlying) {
+      // 비행 그림자
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath(); ctx.ellipse(sx, sy + r * 1.4, r * 0.9, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      // 비행체 본체 (위로 띄움)
+      const liftY = sy - r * 1.2;
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      // 비행기 모양 (마름모)
+      ctx.moveTo(sx, liftY - r * 1.2);
+      ctx.lineTo(sx + r * 1.1, liftY);
+      ctx.lineTo(sx, liftY + r * 0.5);
+      ctx.lineTo(sx - r * 1.1, liftY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = dotColor;
+      ctx.beginPath(); ctx.arc(sx, liftY, r * 0.4, 0, Math.PI * 2); ctx.fill();
+      if (u.hp < u.maxHp) {
+        const bw = r * 2.4, bh = 2;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(sx - bw / 2, liftY - r - 5, bw, bh);
+        ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#6dd16d' : u.hp / u.maxHp > 0.25 ? '#ffd76d' : '#ff6a6a';
+        ctx.fillRect(sx - bw / 2, liftY - r - 5, bw * (u.hp / u.maxHp), bh);
+      }
+      continue;
+    }
+
+    if (isTank) {
+      // 탱크: 사각형 모양
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(sx - r * 1.2, sy - r * 0.8, r * 2.4, r * 1.6);
+      ctx.fillStyle = dotColor;
+      ctx.fillRect(sx - r * 0.5, sy - r * 0.4, r, r * 0.8);
+      // 포신
+      ctx.fillStyle = '#222';
+      ctx.fillRect(sx + r * 0.5, sy - r * 0.15, r * 1.2, r * 0.3);
+    } else {
+      ctx.fillStyle = baseColor;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = dotColor;
+      ctx.beginPath(); ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    if (u.hp < u.maxHp) {
+      const bw = r * 2.4, bh = 2;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(sx - bw / 2, sy - r - 5, bw, bh);
+      ctx.fillStyle = u.hp / u.maxHp > 0.5 ? '#6dd16d' : u.hp / u.maxHp > 0.25 ? '#ffd76d' : '#ff6a6a';
+      ctx.fillRect(sx - bw / 2, sy - r - 5, bw * (u.hp / u.maxHp), bh);
+    }
+  }
+  // 부대 라벨: 병과/모드/병력
+  const [cx, cy] = squadCenter(sq);
+  const [csx, csy] = worldToScreen(cx, cy);
+  const alive = aliveUnits(sq);
+  ctx.font = `bold ${Math.round(11 * scale)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  const label = `${UNIT_BADGE[sq.type]} ${alive.length}`;
+  ctx.strokeText(label, csx, csy - 20);
+  ctx.fillText(label, csx, csy - 20);
+  // 모드 아이콘
+  if (sq.mode !== 'manual') {
+    ctx.font = `bold ${Math.round(9 * scale)}px sans-serif`;
+    const ic = sq.mode === 'aggressive' ? '▲' : '■';
+    ctx.fillStyle = sq.mode === 'aggressive' ? '#ff8585' : '#9ae89a';
+    ctx.strokeText(ic, csx + 18 * scale, csy - 18);
+    ctx.fillText(ic, csx + 18 * scale, csy - 18);
+  }
+}
+
+// ===================== UI =====================
+function powerOf(k) {
+  // 인구 + 병력*2 + 도시*30 + 자원/10
+  return k.pop + k.militaryPop * 2 + ownedCities(k.side).length * 30 + (k.food + k.gold * 2 + k.iron * 2) / 20;
+}
+function updateUI() {
+  document.getElementById('bluePop').textContent = blue.pop;
+  document.getElementById('redPop').textContent = red.pop;
+  document.getElementById('blueMil').textContent = blue.militaryPop;
+  document.getElementById('redMil').textContent = red.militaryPop;
+  document.getElementById('blueCities').textContent = ownedCities('blue').length;
+  document.getElementById('redCities').textContent = ownedCities('red').length;
+
+  const phaseEl = document.getElementById('phaseLabel');
+  const cntEl = document.getElementById('phaseCount');
+  if (game.phase === 'peace') {
+    const t = Math.max(0, Math.ceil(game.peaceLeft));
+    const m = Math.floor(t / 60), s = t % 60;
+    phaseEl.firstChild.textContent = '평화 ';
+    cntEl.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    phaseEl.className = 'phaseBox peace';
+  } else {
+    const t = Math.max(0, Math.ceil(game.warLeft));
+    const m = Math.floor(t / 60), s = t % 60;
+    phaseEl.firstChild.textContent = '⚔ 전쟁 ';
+    cntEl.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    phaseEl.className = 'phaseBox war';
+  }
+
+  // 국력 비교
+  const bp = powerOf(blue), rp = powerOf(red);
+  const total = Math.max(1, bp + rp);
+  document.getElementById('bluePower').style.width = (bp / total * 100) + '%';
+  document.getElementById('redPower').style.width  = (rp / total * 100) + '%';
+  document.getElementById('bluePowerLbl').textContent = `청룡 ${Math.round(bp)}`;
+  document.getElementById('redPowerLbl').textContent  = `주작 ${Math.round(rp)}`;
+
+  if (ourSide()) {
+    const k = sides[ourSide()];
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('eraLbl', k.era === 'modern' ? '🏭 현대' : '🏰 중세');
+    set('popLbl', `${k.pop}/${POP_CAP}`);
+    set('milLbl', `${k.militaryPop} / ${Math.max(0, k.pop - k.militaryPop)}`);
+    set('cityLbl', ownedCities(k.side).length);
+    set('foodLbl', Math.floor(k.food));
+    set('goldLbl', Math.floor(k.gold));
+    set('ironLbl', Math.floor(k.iron));
+    const rate = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '/s';
+    set('foodRate', rate(k._foodRate || 0));
+    set('goldRate', rate(k._goldRate || 0));
+    set('ironRate', rate(k._ironRate || 0));
+    document.querySelectorAll('#recruitGrid [data-recruit]').forEach(b => {
+      const t = b.dataset.recruit;
+      if (k.unlocked.has(t)) b.disabled = !canAfford(k, UNIT_COST[t]);
+    });
+    const warBtn = document.getElementById('warBtn');
+    if (warBtn) warBtn.disabled = (game.phase !== 'peace');
+    // 연구 진행 갱신
+    if (k.research.current) {
+      const items = document.querySelectorAll('#researchList .resItem');
+      // 가장 간단히는 매 0.5초 재구성
+    }
+    // 매 프레임 연구 progress bar 갱신
+    if (k.research.current) {
+      const cur = k.research.current;
+      const r = RESEARCH[cur.id];
+      const items = document.querySelectorAll('#researchList .resItem.active .prog .fill');
+      items.forEach(el => { el.style.width = Math.floor(100 * cur.progress / r.time) + '%'; });
+    }
+    // 연구 완료 변화 감지: done 수 변하면 리스트 재구성
+    if (k._lastDoneCount !== k.research.done.size || k._lastHasCurrent !== !!k.research.current) {
+      k._lastDoneCount = k.research.done.size;
+      k._lastHasCurrent = !!k.research.current;
+      rebuildResearchList();
+      rebuildRecruitGrid();
+    }
+    // 선택 정보
+    const selInfo = document.getElementById('selInfo');
+    if (selInfo) {
+      const sel = selectedSquadsList();
+      if (sel.length === 0) selInfo.textContent = '없음';
+      else {
+        const rows = sel.map(sq => {
+          const n = aliveUnits(sq).length;
+          const inDef = sq.garrisonedAt ? ' 🛡' : '';
+          return `<div class="row">${UNIT_KO[sq.type]} ${n}명 / ${MODE_KO[sq.garrisonedAt ? 'garrison' : sq.mode]}${inDef}</div>`;
+        }).join('');
+        selInfo.innerHTML = `<div class="selSquadList"><b style="color:#fff">${sel.length}개 부대</b>${rows}</div>`;
+      }
+    }
+  } else if (game.mode === 'spectate') {
+    const sb = document.getElementById('specBlue');
+    const sr = document.getElementById('specRed');
+    if (sb) sb.innerHTML = makeSpectatePanel(blue, '청룡', '#6cb3ff');
+    if (sr) sr.innerHTML = makeSpectatePanel(red,  '주작', '#ff8585');
+  }
+}
+function makeSpectatePanel(k, name, color) {
+  const cur = k.research.current;
+  const curHtml = cur
+    ? `<div class="res"><span>연구중</span><b style="color:#ffd76d">${RESEARCH[cur.id].name} (${Math.floor(100*cur.progress/RESEARCH[cur.id].time)}%)</b></div>`
+    : '';
+  const doneList = [...k.research.done].map(id => RESEARCH[id].name).join(', ') || '없음';
+  return `
+    <h3 style="color:${color}">${name} 왕국 ${k.era === 'modern' ? '🏭' : '🏰'}</h3>
+    <div class="res"><span>시대</span><b>${k.era === 'modern' ? '현대' : '중세'}</b></div>
+    <div class="res"><span>인구</span><b>${k.pop}/${POP_CAP}</b></div>
+    <div class="res"><span>병력</span><b>${k.militaryPop}</b></div>
+    <div class="res"><span>도시</span><b>${ownedCities(k.side).length}</b></div>
+    <div class="res food"><span>식량</span><b>${Math.floor(k.food)}</b></div>
+    <div class="res gold"><span>금</span><b>${Math.floor(k.gold)}</b></div>
+    <div class="res iron"><span>철</span><b>${Math.floor(k.iron)}</b></div>
+    <div class="res"><span>부대</span><b>${k.squads.length}</b></div>
+    ${curHtml}
+    <div class="res"><span>연구</span><b style="font-size:11px;color:#9ae89a;text-align:right">${doneList}</b></div>
+  `;
+}
+
+// ===================== 시작 =====================
+resizeCanvas();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
