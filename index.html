@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#11141a">
 <title>두 왕국의 전쟁</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; background: #1a1d24; color: #eee; font-family: 'Malgun Gothic', sans-serif; overflow: hidden; }
@@ -276,6 +277,57 @@
     border: 1px solid #3a4050; border-radius: 4px; cursor: pointer; margin-top: 16px;
   }
   #endOverlay button:hover { background: #3a4050; }
+
+  /* ===== 룸(2인 모드 온라인) ===== */
+  #roomOverlay .roomBox {
+    background: #161a22; border: 1px solid #2a2f3a; border-radius: 8px;
+    padding: 28px 32px; min-width: 360px; max-width: 90vw; text-align: center;
+  }
+  #roomOverlay input[type=text] {
+    width: 100%; padding: 10px 14px; font-size: 16px;
+    background: #1a1f2a; border: 1px solid #3a4050; color: #fff;
+    border-radius: 4px; outline: none; margin-top: 12px;
+  }
+  #roomOverlay input[type=text]:focus { border-color: #c08fff; }
+  #roomOverlay .btn {
+    padding: 10px 20px; background: #2a2f3a; color: #ddd;
+    border: 1px solid #3a4050; border-radius: 4px; cursor: pointer;
+    font-size: 14px; margin: 6px;
+  }
+  #roomOverlay .btn:hover { background: #3a4050; color: #fff; }
+  #roomOverlay .btn.primary { background: #5a3a8a; border-color: #c08fff; color: #fff; }
+  #roomOverlay .btn.primary:hover { background: #6e48a8; }
+  #roomOverlay .roomCards { display: flex; gap: 16px; justify-content: center; margin-top: 12px; }
+  #roomOverlay .roomCard {
+    width: 160px; padding: 20px 12px; background: #1a1f2a;
+    border: 2px solid #2a2f3a; border-radius: 8px; cursor: pointer;
+  }
+  #roomOverlay .roomCard:hover { background: #232a38; border-color: #c08fff; transform: translateY(-3px); transition: all 0.15s; }
+  #roomOverlay .roomCard h3 { font-size: 16px; margin-bottom: 6px; }
+  #roomOverlay .roomCard p { font-size: 11px; color: #aaa; margin: 0; }
+  #roomOverlay .status { font-size: 14px; color: #c08fff; margin-top: 16px; min-height: 22px; }
+  #roomOverlay .roomCode {
+    font-family: monospace; font-size: 20px; padding: 8px 16px;
+    background: #11141a; border-radius: 4px; color: #ffd76d; margin: 10px 0;
+    border: 1px dashed #555; user-select: all;
+  }
+  #roomOverlay .hint { font-size: 11px; color: #888; margin-top: 10px; line-height: 1.5; }
+  #roomOverlay .error { color: #ff8585; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid #444; border-top-color: #c08fff;
+    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* MP 모드 표시 */
+  .mpRoleBadge {
+    position: absolute; top: 10px; right: 10px; z-index: 40;
+    padding: 6px 12px; border-radius: 14px; font-size: 11px; font-weight: bold;
+    background: rgba(17,20,26,0.92); border: 1px solid #3a4050;
+  }
+  .mpRoleBadge.blueA { color: #6cb3ff; border-color: #4a8fff; }
+  .mpRoleBadge.redA  { color: #ff8585; border-color: #ff4a4a; }
 </style>
 </head>
 <body>
@@ -367,6 +419,46 @@
             </div>
           </div>
           <button class="stepBack" id="step2Back">← 시대 다시 선택</button>
+        </div>
+      </div>
+      <div class="mpRoleBadge" id="mpRoleBadge" style="display:none"></div>
+      <div class="overlay" id="roomOverlay" style="display:none">
+        <div class="roomBox">
+          <h1 style="font-size:28px;letter-spacing:3px;margin-bottom:8px">2인 모드</h1>
+          <p style="color:#aaa;font-size:13px;margin-bottom:16px">친구와 함께 온라인으로 플레이</p>
+
+          <div id="roomStep1">
+            <p style="font-size:14px">방을 만들거나 입장하세요</p>
+            <div class="roomCards">
+              <div class="roomCard" data-action="create">
+                <h3 style="color:#6cb3ff">🏰 방 만들기</h3>
+                <p>당신이 호스트(청룡)<br>친구가 입장 대기</p>
+              </div>
+              <div class="roomCard" data-action="join">
+                <h3 style="color:#ff8585">⚔ 방 입장</h3>
+                <p>친구가 만든 방에<br>참여 (주작)</p>
+              </div>
+            </div>
+            <button class="btn" id="roomBackBtn" style="margin-top:14px">← 진영 선택</button>
+          </div>
+
+          <div id="roomStep2" style="display:none">
+            <p id="roomStep2Title" style="font-size:14px"></p>
+            <input type="text" id="roomNameInput" placeholder="방 이름 (예: dragon1)" maxlength="24" autocapitalize="off" autocomplete="off">
+            <p class="hint">영문, 숫자, 한글 사용 가능. 친구와 같은 이름을 입력하면 연결됩니다.</p>
+            <div style="margin-top:10px">
+              <button class="btn" id="roomStep2Back">← 뒤로</button>
+              <button class="btn primary" id="roomStep2Confirm">확인</button>
+            </div>
+          </div>
+
+          <div id="roomStep3" style="display:none">
+            <p id="roomStep3Msg" style="font-size:14px;margin-bottom:6px"><span class="spinner"></span>연결 중...</p>
+            <div class="roomCode" id="roomStep3Code"></div>
+            <p class="hint" id="roomStep3Hint"></p>
+            <div class="status" id="roomStatus"></div>
+            <button class="btn" id="roomStep3Cancel" style="margin-top:14px">취소</button>
+          </div>
         </div>
       </div>
       <div class="overlay" id="endOverlay" style="display:none">
@@ -680,16 +772,25 @@ function selectedSquadsList() {
 }
 function commandSelected(wx, wy, target) {
   const our = ourSide();
+  // MP 클라이언트: 호스트에 명령 전송 (옵티미스틱 적용은 호스트의 다음 broadcast로 정정)
+  if (mp.enabled && mp.role === 'client' && our === 'red') {
+    const squadIds = [];
+    for (const sq of selectedSquadsList()) if (sq.side === 'red') squadIds.push(sq.id);
+    if (squadIds.length === 0) return;
+    sendMp({
+      type: 'command', squadIds, wx, wy,
+      targetCityId: (target && target.kind === 'city') ? target.ref.id : null,
+    });
+    return;
+  }
   for (const sq of selectedSquadsList()) {
     if (sq.side !== our) continue;
     if (target && target.kind === 'city' && target.ref.owner === sq.side) {
-      // 아군 도시 → 주둔
       sq.garrisonedAt = target.ref;
       sq.targetPos = { x: target.ref.x, y: target.ref.y };
       sq.targetCity = null;
       logEvent(`${UNIT_KO[sq.type]} 부대가 ${target.ref.name}에 주둔합니다`, sq.side);
     } else {
-      // 이동 / 공격
       sq.garrisonedAt = null;
       sq.targetPos = { x: wx, y: wy };
       sq.targetCity = (target && target.kind === 'city') ? target.ref : null;
@@ -1079,6 +1180,10 @@ function checkVictory() {
 }
 function endGame(winnerSide, reasonText) {
   game.ended = true;
+  // 호스트면 클라이언트에 종료 알림
+  if (mp.enabled && mp.role === 'host' && mp.connected) {
+    sendMp({ type: 'end', winner: winnerSide, reason: reasonText || '' });
+  }
   const ov = document.getElementById('endOverlay');
   const result = document.getElementById('endResult');
   const detail = document.getElementById('endDetail');
@@ -1205,8 +1310,14 @@ document.querySelectorAll('#modeStep1 .card').forEach(card => {
 // Step 2: 진영 선택
 document.querySelectorAll('#modeStep2 .card').forEach(card => {
   card.addEventListener('click', () => {
-    game.mode = card.dataset.mode;
-    if (game.mode === 'duo') game.activeSide = 'blue';
+    const mode = card.dataset.mode;
+    // 2인 모드는 룸 오버레이로 분기
+    if (mode === 'duo') {
+      document.getElementById('modeOverlay').style.display = 'none';
+      roomOverlayShow('roomStep1');
+      return;
+    }
+    game.mode = mode;
     applyEraMode();
     document.getElementById('modeOverlay').style.display = 'none';
     game.peaceLeft = PEACE_MIN + Math.random() * (PEACE_MAX - PEACE_MIN);
@@ -1214,9 +1325,6 @@ document.querySelectorAll('#modeStep2 .card').forEach(card => {
     resizeCanvas();
     const eraName = game.eraMode === 'medieval' ? '🏰 중세' : game.eraMode === 'modern' ? '🏭 현대' : '⚔→🏭 발전형';
     logEvent(`${eraName} 모드 시작`, null, 'war');
-    if (game.mode === 'duo') {
-      logEvent('2인 모드: TAB 키 또는 상단 버튼으로 진영 전환', null, 'war');
-    }
     if ('ontouchstart' in window) {
       logEvent('📱 탭=선택, 길게누르기=명령, 드래그=박스선택, ☰=메뉴', null, 'war');
     }
@@ -1229,9 +1337,9 @@ document.getElementById('step2Back').addEventListener('click', () => {
   document.getElementById('modeStep1').style.display = 'block';
 });
 
-// TAB 키로 진영 전환 (2인 모드)
+// TAB 키로 진영 전환 (오프라인 2인 모드만)
 window.addEventListener('keydown', e => {
-  if (e.code === 'Tab' && game.mode === 'duo') {
+  if (e.code === 'Tab' && game.mode === 'duo' && !mp.enabled) {
     e.preventDefault();
     game.activeSide = game.activeSide === 'blue' ? 'red' : 'blue';
     clearSelection();
@@ -1255,6 +1363,11 @@ function restartGame() {
   bc.isCapital = true; rc.isCapital = true; bc.radius = 45; rc.radius = 45;
   cities.push(bc, rc);
   rebuildNeutralCities();
+  // MP 연결 정리
+  cleanupMp();
+  document.getElementById('mpRoleBadge').style.display = 'none';
+  document.getElementById('roomOverlay').style.display = 'none';
+
   document.getElementById('endOverlay').style.display = 'none';
   document.getElementById('modeOverlay').style.display = 'flex';
   document.getElementById('modeStep1').style.display = 'block';
@@ -1266,6 +1379,395 @@ function restartGame() {
   setSpeedActive();
 }
 document.getElementById('restartBtn').addEventListener('click', restartGame);
+
+// ===================== 멀티플레이어 (PeerJS) =====================
+const mp = {
+  enabled: false,
+  role: null,         // 'host' | 'client'
+  peer: null,
+  conn: null,
+  roomName: null,
+  connected: false,
+  lastBroadcast: 0,
+  pendingAction: null,  // 'create' | 'join'
+};
+
+const PEER_PREFIX = 'twokingdomswar-v1-';
+function sanitizeRoom(s) { return s.trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); }
+
+function roomOverlayShow(step) {
+  document.getElementById('roomOverlay').style.display = 'flex';
+  ['roomStep1','roomStep2','roomStep3'].forEach(id => {
+    document.getElementById(id).style.display = id === step ? 'block' : 'none';
+  });
+}
+function roomOverlayHide() { document.getElementById('roomOverlay').style.display = 'none'; }
+function setRoomStatus(msg, error) {
+  const el = document.getElementById('roomStatus');
+  el.textContent = msg || '';
+  el.className = 'status' + (error ? ' error' : '');
+}
+
+document.querySelectorAll('#roomStep1 .roomCard').forEach(card => {
+  card.addEventListener('click', () => {
+    mp.pendingAction = card.dataset.action;
+    document.getElementById('roomStep2Title').textContent =
+      mp.pendingAction === 'create' ? '방 이름을 정하세요' : '입장할 방 이름을 입력하세요';
+    document.getElementById('roomNameInput').value = '';
+    roomOverlayShow('roomStep2');
+    setTimeout(() => document.getElementById('roomNameInput').focus(), 50);
+  });
+});
+document.getElementById('roomBackBtn').addEventListener('click', () => {
+  // 진영 선택으로 복귀
+  roomOverlayHide();
+  document.getElementById('modeOverlay').style.display = 'flex';
+});
+document.getElementById('roomStep2Back').addEventListener('click', () => roomOverlayShow('roomStep1'));
+document.getElementById('roomStep2Confirm').addEventListener('click', confirmRoomName);
+document.getElementById('roomNameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') confirmRoomName();
+});
+document.getElementById('roomStep3Cancel').addEventListener('click', cancelRoomConnection);
+
+function confirmRoomName() {
+  const raw = document.getElementById('roomNameInput').value;
+  const name = sanitizeRoom(raw);
+  if (!name) { alert('방 이름을 입력하세요'); return; }
+  mp.roomName = name;
+  document.getElementById('roomStep3Code').textContent = name;
+  if (mp.pendingAction === 'create') {
+    document.getElementById('roomStep3Msg').innerHTML = '<span class="spinner"></span>방 생성 중...';
+    document.getElementById('roomStep3Hint').textContent = '친구에게 방 이름을 알려주세요.';
+    roomOverlayShow('roomStep3');
+    createRoom(name);
+  } else {
+    document.getElementById('roomStep3Msg').innerHTML = '<span class="spinner"></span>방에 입장 중...';
+    document.getElementById('roomStep3Hint').textContent = '방장이 방을 만들었는지 확인하세요.';
+    roomOverlayShow('roomStep3');
+    joinRoom(name);
+  }
+}
+
+function cancelRoomConnection() {
+  cleanupMp();
+  // 모드 선택으로 복귀
+  roomOverlayHide();
+  document.getElementById('modeOverlay').style.display = 'flex';
+  document.getElementById('modeStep1').style.display = 'block';
+  document.getElementById('modeStep2').style.display = 'none';
+}
+
+function cleanupMp() {
+  if (mp.conn) { try { mp.conn.close(); } catch(e){} mp.conn = null; }
+  if (mp.peer) { try { mp.peer.destroy(); } catch(e){} mp.peer = null; }
+  mp.enabled = false; mp.role = null; mp.connected = false; mp.roomName = null;
+  mp.lastBroadcast = 0; mp.pendingAction = null;
+}
+
+function createRoom(name) {
+  if (typeof Peer === 'undefined') { setRoomStatus('PeerJS 로드 실패 - 인터넷 확인', true); return; }
+  mp.role = 'host';
+  mp.enabled = true;
+  const peerId = PEER_PREFIX + name;
+  mp.peer = new Peer(peerId, { debug: 1 });
+  mp.peer.on('open', id => {
+    setRoomStatus('대기 중... 친구가 입장하면 시작합니다');
+  });
+  mp.peer.on('connection', conn => {
+    mp.conn = conn;
+    conn.on('open', () => {
+      mp.connected = true;
+      setRoomStatus('연결됨! 게임 시작...');
+      setTimeout(() => startMpGame('host'), 400);
+    });
+    conn.on('data', handleClientMsg);
+    conn.on('close', handleDisconnect);
+    conn.on('error', err => setRoomStatus('오류: ' + (err.type || err.message), true));
+  });
+  mp.peer.on('error', err => {
+    const t = err.type || '';
+    if (t === 'unavailable-id') setRoomStatus('이미 같은 이름의 방이 있어요. 다른 이름을 써주세요', true);
+    else setRoomStatus('연결 오류: ' + t, true);
+  });
+}
+
+function joinRoom(name) {
+  if (typeof Peer === 'undefined') { setRoomStatus('PeerJS 로드 실패 - 인터넷 확인', true); return; }
+  mp.role = 'client';
+  mp.enabled = true;
+  mp.peer = new Peer({ debug: 1 });
+  mp.peer.on('open', () => {
+    const conn = mp.peer.connect(PEER_PREFIX + name, { reliable: true });
+    mp.conn = conn;
+    conn.on('open', () => {
+      mp.connected = true;
+      setRoomStatus('연결됨! 호스트 응답 대기...');
+    });
+    conn.on('data', handleHostMsg);
+    conn.on('close', handleDisconnect);
+    conn.on('error', err => setRoomStatus('오류: ' + (err.type || err.message), true));
+    // 연결 실패 타임아웃
+    setTimeout(() => {
+      if (!mp.connected) setRoomStatus('방을 찾을 수 없습니다. 방 이름과 방장 상태를 확인하세요', true);
+    }, 8000);
+  });
+  mp.peer.on('error', err => {
+    const t = err.type || '';
+    if (t === 'peer-unavailable') setRoomStatus('해당 방이 존재하지 않습니다', true);
+    else setRoomStatus('연결 오류: ' + t, true);
+  });
+}
+
+function handleDisconnect() {
+  if (!mp.enabled) return;
+  if (game.mode === 'duo' && !game.ended) {
+    logEvent('⚠ 상대방과 연결이 끊겼습니다', null, 'war');
+    game.paused = true;
+    setSpeedActive();
+    // 연결 상태 표시 갱신
+    const badge = document.getElementById('mpRoleBadge');
+    if (badge) badge.textContent = '⚠ 연결 끊김';
+  }
+}
+
+function sendMp(msg) {
+  if (!mp.conn || !mp.connected) return;
+  try { mp.conn.send(msg); } catch (e) { /* noop */ }
+}
+
+function startMpGame(role) {
+  // 호스트 = 청룡, 클라이언트 = 주작
+  roomOverlayHide();
+  game.mode = 'duo';
+  game.activeSide = role === 'host' ? 'blue' : 'red';
+  if (role === 'host') {
+    // 호스트가 게임 초기 상태 결정 (시대, 평화 카운트 등)
+    applyEraMode();
+    game.peaceLeft = PEACE_MIN + Math.random() * (PEACE_MAX - PEACE_MIN);
+  }
+  // 클라이언트는 호스트의 broadcast로 동기화됨
+  buildSidePanel();
+  resizeCanvas();
+  document.getElementById('modeOverlay').style.display = 'none';
+  const badge = document.getElementById('mpRoleBadge');
+  badge.style.display = 'inline-block';
+  if (role === 'host') {
+    badge.textContent = '🌐 호스트 (청룡)';
+    badge.className = 'mpRoleBadge blueA';
+  } else {
+    badge.textContent = '🌐 입장 (주작)';
+    badge.className = 'mpRoleBadge redA';
+  }
+  const eraName = game.eraMode === 'medieval' ? '🏰 중세' : game.eraMode === 'modern' ? '🏭 현대' : '⚔→🏭 발전형';
+  logEvent(`${eraName} · 온라인 2인 모드 시작`, null, 'war');
+  if (role === 'host') {
+    logEvent('호스트로 시작 (청룡 왕국)', 'blue', 'war');
+    broadcastFullState();
+  } else {
+    logEvent('주작 왕국으로 입장 - 호스트 동기화 대기', 'red', 'war');
+  }
+}
+
+// ===================== 상태 직렬화/복원 =====================
+function serializeKingdom(k) {
+  return {
+    pop: k.pop, food: k.food, gold: k.gold, iron: k.iron,
+    farmerRatio: k.farmerRatio, militaryPop: k.militaryPop,
+    era: k.era, unlocked: [...k.unlocked],
+    bonuses: k.bonuses,
+    research: {
+      done: [...k.research.done],
+      current: k.research.current ? { id: k.research.current.id, progress: k.research.current.progress } : null
+    },
+    _foodRate: k._foodRate || 0, _goldRate: k._goldRate || 0, _ironRate: k._ironRate || 0,
+    squads: k.squads.map(sq => ({
+      id: sq.id, side: sq.side, type: sq.type, mode: sq.mode,
+      targetPos: sq.targetPos, targetCityId: sq.targetCity ? sq.targetCity.id : null,
+      garrisonedAtId: sq.garrisonedAt ? sq.garrisonedAt.id : null,
+      cohesionX: sq.cohesionX, cohesionY: sq.cohesionY,
+      units: sq.units.map(u => ({ x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, alive: u.alive })),
+    })),
+  };
+}
+function serializeCities() {
+  return cities.map(c => ({
+    id: c.id, x: c.x, y: c.y, name: c.name, owner: c.owner,
+    capturer: c.capturer, captureProgress: c.captureProgress,
+    isCapital: c.isCapital, radius: c.radius,
+  }));
+}
+function broadcastFullState() {
+  if (!mp.connected || mp.role !== 'host') return;
+  sendMp({
+    type: 'state',
+    phase: game.phase, peaceLeft: game.peaceLeft, warLeft: game.warLeft,
+    time: game.time, ended: game.ended, eraMode: game.eraMode,
+    blue: serializeKingdom(blue),
+    red: serializeKingdom(red),
+    cities: serializeCities(),
+    log: game.eventLog.slice(-15),
+  });
+}
+
+function applyKingdom(k, data) {
+  k.pop = data.pop; k.food = data.food; k.gold = data.gold; k.iron = data.iron;
+  k.farmerRatio = data.farmerRatio; k.militaryPop = data.militaryPop;
+  k.era = data.era;
+  k.unlocked = new Set(data.unlocked);
+  k.bonuses = data.bonuses;
+  k.research.done = new Set(data.research.done);
+  k.research.current = data.research.current ? { id: data.research.current.id, progress: data.research.current.progress } : null;
+  k._foodRate = data._foodRate; k._goldRate = data._goldRate; k._ironRate = data._ironRate;
+  // squads 동기화
+  const existingMap = new Map(k.squads.map(sq => [sq.id, sq]));
+  const newSquads = [];
+  for (const sd of data.squads) {
+    let sq = existingMap.get(sd.id);
+    if (!sq) {
+      sq = { id: sd.id, side: sd.side, type: sd.type, mode: sd.mode, units: [], selected: false };
+    }
+    sq.side = sd.side; sq.type = sd.type; sq.mode = sd.mode;
+    sq.targetPos = sd.targetPos;
+    sq.targetCity = sd.targetCityId ? cities.find(c => c.id === sd.targetCityId) : null;
+    sq.garrisonedAt = sd.garrisonedAtId ? cities.find(c => c.id === sd.garrisonedAtId) : null;
+    sq.cohesionX = sd.cohesionX; sq.cohesionY = sd.cohesionY;
+    // units: 직접 교체 (개수 일치 보장)
+    sq.units = sd.units.map(u => ({ x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, alive: u.alive, cooldown: 0 }));
+    newSquads.push(sq);
+  }
+  k.squads = newSquads;
+  // 선택 정리
+  for (const sid of [...game.selectedSquads]) {
+    if (!newSquads.find(s => s.id === sid) && !(/* 반대 진영 부대도 확인 */ false)) {
+      game.selectedSquads.delete(sid);
+    }
+  }
+}
+
+function applyFullState(data) {
+  game.phase = data.phase;
+  game.peaceLeft = data.peaceLeft;
+  game.warLeft = data.warLeft;
+  game.time = data.time;
+  game.ended = data.ended;
+  game.eraMode = data.eraMode;
+  // cities 동기화 (id 기준)
+  const cmap = new Map(cities.map(c => [c.id, c]));
+  for (const cd of data.cities) {
+    let c = cmap.get(cd.id);
+    if (!c) {
+      c = { id: cd.id, x: cd.x, y: cd.y, name: cd.name, isCapital: cd.isCapital, radius: cd.radius };
+      cities.push(c);
+    }
+    c.x = cd.x; c.y = cd.y; c.name = cd.name; c.owner = cd.owner;
+    c.capturer = cd.capturer; c.captureProgress = cd.captureProgress;
+    c.isCapital = cd.isCapital; c.radius = cd.radius;
+  }
+  applyKingdom(blue, data.blue);
+  applyKingdom(red, data.red);
+  // 이벤트 로그: 새 항목만 추가
+  if (data.log && data.log.length) {
+    const lastLocalTime = game.eventLog.length ? game.eventLog[game.eventLog.length-1].time : -1;
+    for (const e of data.log) {
+      if (e.time > lastLocalTime) game.eventLog.push(e);
+    }
+    if (game.eventLog.length > 30) game.eventLog.splice(0, game.eventLog.length - 30);
+    renderEventLog();
+  }
+  // 게임 종료 처리
+  if (data.ended && !document.getElementById('endOverlay').style.display === 'flex') {
+    // host가 endGame 호출하면 종료 메시지도 별도 전송
+  }
+}
+
+// ===================== 호스트/클라이언트 메시지 핸들러 =====================
+function handleClientMsg(msg) {
+  // host가 client(red) 입력을 받아 처리
+  if (!msg || mp.role !== 'host') return;
+  const k = red;
+  switch (msg.type) {
+    case 'recruit':    recruit(k, msg.unit, msg.mode); break;
+    case 'research':   startResearch(k, msg.id); break;
+    case 'farmer':     k.farmerRatio = Math.max(0.1, Math.min(0.9, msg.val)); break;
+    case 'declareWar': if (game.phase === 'peace') startWar(true); break;
+    case 'command':    applyClientCommand(msg); break;
+  }
+}
+
+function applyClientCommand(msg) {
+  // msg: { squadIds: [...], wx, wy, targetCityId }
+  const ids = new Set(msg.squadIds);
+  const targetCity = msg.targetCityId ? cities.find(c => c.id === msg.targetCityId) : null;
+  for (const sq of red.squads) {
+    if (!ids.has(sq.id)) continue;
+    if (targetCity && targetCity.owner === sq.side) {
+      sq.garrisonedAt = targetCity;
+      sq.targetPos = { x: targetCity.x, y: targetCity.y };
+      sq.targetCity = null;
+    } else {
+      sq.garrisonedAt = null;
+      sq.targetPos = { x: msg.wx, y: msg.wy };
+      sq.targetCity = targetCity || null;
+    }
+  }
+}
+
+function handleHostMsg(msg) {
+  if (!msg || mp.role !== 'client') return;
+  if (msg.type === 'state') applyFullState(msg);
+  else if (msg.type === 'event') {
+    // 즉시 알림 (선택 사항)
+  }
+  else if (msg.type === 'end') {
+    showEndOverlay(msg.winner, msg.reason);
+  }
+}
+
+function showEndOverlay(winner, reason) {
+  game.ended = true;
+  const ov = document.getElementById('endOverlay');
+  const result = document.getElementById('endResult');
+  const detail = document.getElementById('endDetail');
+  result.textContent = winner === 'blue' ? '청룡 왕국 승리' : winner === 'red' ? '주작 왕국 승리' : '무승부';
+  result.className = 'result ' + (winner === '무승부' ? '' : 'win');
+  detail.textContent = reason || '';
+  ov.style.display = 'flex';
+}
+
+// 호스트 wrapper: 클라이언트는 호스트에게 액션 전송, 자체 실행은 안 함 (다음 broadcast로 반영)
+function mpRecruit(k, type, mode) {
+  if (mp.enabled && mp.role === 'client' && k.side === 'red') {
+    // 옵티미스틱 사전 검증 (UI 메시지 정확도용)
+    if (!canAfford(k, UNIT_COST[type])) return false;
+    if (!k.unlocked.has(type)) return false;
+    sendMp({ type: 'recruit', unit: type, mode });
+    return true;
+  }
+  return recruit(k, type, mode);
+}
+function mpStartResearch(k, id) {
+  if (mp.enabled && mp.role === 'client' && k.side === 'red') {
+    if (k.research.done.has(id)) return false;
+    if (k.research.current) return false;
+    if (!canAfford(k, RESEARCH[id].cost)) return false;
+    sendMp({ type: 'research', id });
+    return true;
+  }
+  return startResearch(k, id);
+}
+function mpSetFarmer(k, val) {
+  if (mp.enabled && mp.role === 'client' && k.side === 'red') {
+    sendMp({ type: 'farmer', val });
+    k.farmerRatio = val; // 옵티미스틱 (다음 state로 정정됨)
+    return;
+  }
+  k.farmerRatio = val;
+}
+function mpDeclareWar() {
+  if (mp.enabled && mp.role === 'client') { sendMp({ type: 'declareWar' }); return; }
+  if (game.phase === 'peace') startWar(true);
+}
 
 // ===================== 모바일 사이드바 토글 =====================
 const sideEl = document.getElementById('side');
@@ -1349,9 +1851,9 @@ canvas.addEventListener('touchcancel', () => {
 // ===================== 사이드 패널 =====================
 function buildSidePanel() {
   const c = document.getElementById('sideContent');
-  // 2인 모드: 진영 토글 표시
+  // 2인 모드 진영 토글: 온라인 MP에서는 각자 자기 진영 고정이므로 숨김
   const duoToggle = document.getElementById('duoToggle');
-  if (game.mode === 'duo') {
+  if (game.mode === 'duo' && !mp.enabled) {
     duoToggle.innerHTML = `
       <button class="toggleBtn ${game.activeSide === 'blue' ? 'active blueA' : ''}" data-side="blue">⚔ 청룡 왕국</button>
       <button class="toggleBtn ${game.activeSide === 'red'  ? 'active redA'  : ''}" data-side="red">⚔ 주작 왕국</button>
@@ -1443,7 +1945,7 @@ function buildSidePanel() {
     const v = +farmer.value;
     document.getElementById('farmerVal').textContent = v + '%';
     document.getElementById('minerVal').textContent = (100 - v) + '%';
-    sides[ourSide()].farmerRatio = v / 100;
+    mpSetFarmer(sides[ourSide()], v / 100);
   });
   document.querySelectorAll('[data-recruit-mode]').forEach(b => {
     b.addEventListener('click', () => {
@@ -1452,7 +1954,7 @@ function buildSidePanel() {
     });
   });
   document.getElementById('warBtn').addEventListener('click', () => {
-    if (game.phase === 'peace') startWar(true);
+    mpDeclareWar();
   });
   rebuildRecruitGrid();
   rebuildResearchList();
@@ -1517,8 +2019,8 @@ function rebuildRecruitGrid() {
       const co = UNIT_COST[t];
       btn.innerHTML = `<span class="name">${UNIT_KO[t]}</span><span class="cost">인${co.pop} 식${co.food}<br>금${co.gold} 철${co.iron}</span>`;
       btn.addEventListener('click', () => {
-        const kk = sides[ourSide()]; // 클릭 시점의 활성 진영 (duo 토글 후에도 안전)
-        if (!recruit(kk, t, game.recruit.mode)) logEvent('자원이 부족합니다', kk.side);
+        const kk = sides[ourSide()];
+        if (!mpRecruit(kk, t, game.recruit.mode)) logEvent('자원이 부족합니다', kk.side);
         else logEvent(`${UNIT_KO[t]} 부대 모집 (${MODE_KO[game.recruit.mode]})`, kk.side);
       });
     } else {
@@ -1556,7 +2058,7 @@ function rebuildResearchList() {
     if (!done && !active) {
       div.addEventListener('click', () => {
         const kk = sides[ourSide()];
-        if (startResearch(kk, id)) rebuildResearchList();
+        if (mpStartResearch(kk, id)) rebuildResearchList();
         else logEvent('자원이 부족하거나 다른 연구가 진행 중입니다', kk.side);
       });
     }
@@ -1578,6 +2080,8 @@ function loop(now) {
 
 function update(dt) {
   if (game.mode === null) return;
+  // MP 클라이언트는 시뮬레이션을 하지 않음 (호스트 상태 broadcast 수신)
+  if (mp.enabled && mp.role === 'client') return;
   game.time += dt;
 
   if (game.phase === 'peace') {
@@ -1600,6 +2104,14 @@ function update(dt) {
   cleanupSquads(blue);
   cleanupSquads(red);
   checkVictory();
+
+  // 호스트: 0.15초 주기로 전체 상태 broadcast
+  if (mp.enabled && mp.role === 'host' && mp.connected) {
+    if (game.time - mp.lastBroadcast >= 0.15) {
+      mp.lastBroadcast = game.time;
+      broadcastFullState();
+    }
+  }
 }
 
 // ===================== 렌더 =====================
