@@ -107,6 +107,17 @@
   #side .recruitGrid button { padding: 6px 2px; line-height: 1.3; }
   #side .recruitGrid .name { display: block; font-weight: bold; font-size: 12px; }
   #side .recruitGrid .cost { display: block; font-size: 9px; color: #aaa; margin-top: 2px; }
+  /* 건설 섹션 */
+  #side .buildGrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-top: 4px; }
+  #side .buildGrid button { padding: 8px 2px; line-height: 1.3; }
+  #side .buildGrid button.active { background: #6a4a1f; border-color: #ffd76d; color: #fff; }
+  #side .buildGrid .icon { display: block; font-size: 18px; }
+  #side .buildGrid .name { display: block; font-weight: bold; font-size: 11px; }
+  #side .buildGrid .cost { display: block; font-size: 9px; color: #aaa; margin-top: 1px; }
+  #side .builderBtn { width: 100%; padding: 7px; font-size: 12px; margin-bottom: 6px; }
+  #side .builderBtn b { color: #a8d896; }
+  #side .buildHint { font-size: 10px; color: #888; margin-top: 6px; line-height: 1.5; }
+  #side .buildModeIndicator { font-size: 11px; color: #ffd76d; margin-top: 4px; font-weight: bold; }
   #side .warBtn {
     width: 100%; padding: 8px; margin-top: 6px; font-size: 13px; font-weight: bold;
     background: #6a1f1f; border-color: #a04040; color: #ff9090;
@@ -511,6 +522,8 @@ const UNIT_STATS = {
   rifleman: { hp: 95,  atk: 22, rng: 110, spd: 0.70, radius: 4, cool: 0.7 },
   tank:     { hp: 360, atk: 32, rng: 60,  spd: 0.55, radius: 7, cool: 1.4 },
   fighter:  { hp: 90,  atk: 28, rng: 180, spd: 2.80, radius: 5, cool: 1.5, flying: true },
+  // 민간 - 건물 건설 전용
+  builder:  { hp: 40,  atk: 0,  rng: 0,   spd: 0.80, radius: 4, cool: 999 },
 };
 const UNIT_COST = {
   infantry: { pop: 5,  food: 15, gold: 8,   iron: 14  },
@@ -522,14 +535,24 @@ const UNIT_COST = {
   rifleman: { pop: 5,  food: 18, gold: 35,  iron: 25  },
   tank:     { pop: 10, food: 35, gold: 90,  iron: 110 },
   fighter:  { pop: 8,  food: 28, gold: 140, iron: 90  },
+  builder:  { pop: 3,  food: 10, gold: 15,  iron: 5   },
 };
-const UNIT_KO    = { infantry:'보병', archer:'궁수', cavalry:'기병', spearman:'창병', crossbow:'석궁병', catapult:'공성병기', rifleman:'소총병', tank:'탱크', fighter:'전투기' };
-const UNIT_BADGE = { infantry:'보',   archer:'궁',   cavalry:'기',   spearman:'창',   crossbow:'석',     catapult:'포',        rifleman:'총',     tank:'탱',  fighter:'공'    };
-const UNIT_DOT   = { infantry:'#ffffff', archer:'#ffd76d', cavalry:'#ff9a4a', spearman:'#c8d8ff', crossbow:'#ffaa33', catapult:'#cc99ff', rifleman:'#cfd6df', tank:'#7ab07a', fighter:'#9adcff' };
+const UNIT_KO    = { infantry:'보병', archer:'궁수', cavalry:'기병', spearman:'창병', crossbow:'석궁병', catapult:'공성병기', rifleman:'소총병', tank:'탱크', fighter:'전투기', builder:'빌더' };
+const UNIT_BADGE = { infantry:'보',   archer:'궁',   cavalry:'기',   spearman:'창',   crossbow:'석',     catapult:'포',        rifleman:'총',     tank:'탱',  fighter:'공',     builder:'건'   };
+const UNIT_DOT   = { infantry:'#ffffff', archer:'#ffd76d', cavalry:'#ff9a4a', spearman:'#c8d8ff', crossbow:'#ffaa33', catapult:'#cc99ff', rifleman:'#cfd6df', tank:'#7ab07a', fighter:'#9adcff', builder:'#a8d896' };
 const BASIC_UNITS    = ['infantry','archer','cavalry'];
 const ADVANCED_UNITS = ['spearman','crossbow','catapult'];
 const MODERN_UNITS   = ['rifleman','tank','fighter'];
+const CIVIL_UNITS    = ['builder']; // 모집 그리드/상성표에 표시 안 함
 const ALL_UNITS = [...BASIC_UNITS, ...ADVANCED_UNITS, ...MODERN_UNITS];
+
+// ===================== 건물 정의 =====================
+const BUILDING_TYPES = {
+  farm:     { name: '농장',   icon: '🌾', hp: 120, cost: { gold: 30, iron: 20 }, buildTime: 8,  produces: { food: 0.6 }, color: '#6dd16d' },
+  goldMine: { name: '금광',   icon: '💰', hp: 160, cost: { gold: 0,  iron: 60 }, buildTime: 12, produces: { gold: 0.45 }, color: '#ffd76d' },
+  ironMine: { name: '철광산', icon: '⛏', hp: 160, cost: { gold: 60, iron: 0  }, buildTime: 12, produces: { iron: 0.50 }, color: '#b0b8c8' },
+};
+const BUILDING_KEYS = Object.keys(BUILDING_TYPES);
 
 // 병종 상성 (공격자 → 방어자 시 데미지 배율)
 const TYPE_COUNTERS = {
@@ -634,6 +657,7 @@ const game = {
   selectedSquads: new Set(),
   drag: null,
   recruit: { mode: 'manual' },
+  buildMode: null,   // 'farm' | 'goldMine' | 'ironMine' | null
   eventLog: [],
 };
 
@@ -742,6 +766,26 @@ function rebuildNeutralCities() {
 rebuildNeutralCities();
 function ownedCities(side) { return cities.filter(c => c.owner === side); }
 
+// ===================== 건물 =====================
+let buildingIdCounter = 0;
+let buildings = [];
+function makeBuilding(type, x, y, owner) {
+  const def = BUILDING_TYPES[type];
+  return {
+    id: ++buildingIdCounter,
+    type, x, y, owner,
+    hp: def.hp, maxHp: def.hp,
+    constructing: true, constructProgress: 0,
+    radius: 18,
+  };
+}
+function destroyBuilding(b) {
+  const idx = buildings.indexOf(b);
+  if (idx >= 0) buildings.splice(idx, 1);
+  logEvent(`${BUILDING_TYPES[b.type].name} 파괴됨`, b.owner, 'war');
+}
+function ownedBuildings(side) { return buildings.filter(b => b.owner === side); }
+
 // ===================== 부대 / 유닛 =====================
 let squadIdCounter = 0;
 function makeSquad(kingdom, type, count, originCity, mode) {
@@ -787,6 +831,30 @@ function selectedSquadsList() {
 }
 function commandSelected(wx, wy, target) {
   const our = ourSide();
+  if (!our) return;
+
+  // 빌드 모드: 빌더에게 건설 작업 할당
+  if (game.buildMode) {
+    const k = sides[our];
+    const cost = BUILDING_TYPES[game.buildMode].cost;
+    if (!canAfford(k, cost)) {
+      logEvent('자원 부족 - 건설 취소', our);
+      game.buildMode = null; refreshBuildModeUI(); return;
+    }
+    const builders = selectedSquadsList().filter(sq => sq.side === our && sq.type === 'builder');
+    if (!builders.length) { logEvent('빌더를 선택하세요', our); return; }
+    const buildType = game.buildMode;
+    if (mp.enabled && mp.role === 'client' && our === 'red') {
+      sendMp({ type: 'build', squadId: builders[0].id, buildType, wx, wy });
+    } else {
+      payCost(k, cost);
+      builders[0].buildTask = { type: buildType, x: wx, y: wy, progress: 0 };
+      logEvent(`${BUILDING_TYPES[buildType].name} 건설 명령`, our);
+    }
+    game.buildMode = null; refreshBuildModeUI();
+    return;
+  }
+
   // MP 클라이언트: 호스트에 명령 전송 (옵티미스틱 적용은 호스트의 다음 broadcast로 정정)
   if (mp.enabled && mp.role === 'client' && our === 'red') {
     const squadIds = [];
@@ -822,9 +890,18 @@ function tickEconomy(k, dt) {
   const cityCount = cityList.length;
   const hasCapital = cityList.some(c => c.isCapital) ? 1 : 0;
 
-  const foodRate = farmers * 0.10 + cityCount * 0.55 + hasCapital * 0.6;
-  const goldRate = miners  * 0.04 + cityCount * 0.22;
-  const ironRate = miners  * 0.05 + cityCount * 0.18;
+  // 건물 보너스 (완공된 건물만)
+  let bFood = 0, bGold = 0, bIron = 0;
+  for (const b of buildings) {
+    if (b.owner !== k.side || b.constructing) continue;
+    const p = BUILDING_TYPES[b.type].produces;
+    if (p.food) bFood += p.food;
+    if (p.gold) bGold += p.gold;
+    if (p.iron) bIron += p.iron;
+  }
+  const foodRate = farmers * 0.10 + cityCount * 0.55 + hasCapital * 0.6 + bFood;
+  const goldRate = miners  * 0.04 + cityCount * 0.22 + bGold;
+  const ironRate = miners  * 0.05 + cityCount * 0.18 + bIron;
   const foodCons = k.pop * 0.025;
 
   k._foodRate = foodRate - foodCons;
@@ -927,9 +1004,55 @@ function inOwnDefenseZone(side, x, y) {
   return false;
 }
 
+function tickBuilder(sq, dt) {
+  const k = sides[sq.side];
+  const spd = uSpd(k, 'builder');
+  for (const u of sq.units) {
+    if (!u.alive) continue;
+    if (sq.buildTask) {
+      const t = sq.buildTask;
+      const d = dist(u.x, u.y, t.x, t.y);
+      if (d > 6) {
+        u.x += ((t.x - u.x) / d) * spd * dt * 60;
+        u.y += ((t.y - u.y) / d) * spd * dt * 60;
+      } else {
+        t.progress = (t.progress || 0) + dt;
+        const def = BUILDING_TYPES[t.type];
+        if (t.progress >= def.buildTime) {
+          const b = makeBuilding(t.type, t.x, t.y, sq.side);
+          b.constructing = false; b.constructProgress = 1;
+          buildings.push(b);
+          sq.buildTask = null;
+          logEvent(`${def.name} 건설 완료`, sq.side);
+        }
+      }
+    } else if (sq.targetPos) {
+      const tp = sq.targetPos;
+      const d = dist(u.x, u.y, tp.x, tp.y);
+      if (d > 5) {
+        u.x += ((tp.x - u.x) / d) * spd * dt * 60;
+        u.y += ((tp.y - u.y) / d) * spd * dt * 60;
+      }
+    }
+  }
+}
+
+function nearestEnemyBuilding(side, fromX, fromY) {
+  let best = null, bestD = Infinity;
+  for (const b of buildings) {
+    if (b.owner === side) continue;
+    if (game.phase === 'peace') continue; // 평화 시 적 건물 공격 안 함
+    const d = distSq(fromX, fromY, b.x, b.y);
+    if (d < bestD) { bestD = d; best = b; }
+  }
+  return best;
+}
+
 function tickSquad(sq, dt) {
   const alive = aliveUnits(sq);
   if (!alive.length) return;
+  // 빌더는 별도 처리 (전투 없음)
+  if (sq.type === 'builder') { tickBuilder(sq, dt); return; }
   const k = sides[sq.side];
   const myAtk  = uAtk(k, sq.type);
   const myRng  = uRng(k, sq.type);
@@ -955,7 +1078,16 @@ function tickSquad(sq, dt) {
       if (!sq.targetCity || sq.targetCity.owner === sq.side) {
         sq.targetCity = nearestEnemyCity(sq.side, cx, cy);
       }
-      if (sq.targetCity) sq.targetPos = { x: sq.targetCity.x, y: sq.targetCity.y };
+      if (sq.targetCity) {
+        sq.targetPos = { x: sq.targetCity.x, y: sq.targetCity.y };
+        sq.targetBuilding = null;
+      } else {
+        // 적 도시가 없으면 적 건물 노림 (전쟁 중일 때)
+        if (!sq.targetBuilding || sq.targetBuilding.owner === sq.side || sq.targetBuilding.hp <= 0) {
+          sq.targetBuilding = nearestEnemyBuilding(sq.side, cx, cy);
+        }
+        if (sq.targetBuilding) sq.targetPos = { x: sq.targetBuilding.x, y: sq.targetBuilding.y };
+      }
     } else if (sq.mode === 'defensive') {
       const enemySquads = sq.side === 'blue' ? red.squads : blue.squads;
       let threat = null, threatD = 320 * 320;
@@ -1075,6 +1207,25 @@ function tickSquad(sq, dt) {
         c.captureProgress = Math.max(0, c.captureProgress - dt * 0.3);
       }
     }
+    }
+  }
+
+  // 적 건물 공격 (점령 불가, 파괴만)
+  if (sq.targetBuilding && sq.targetBuilding.owner !== sq.side && game.phase !== 'peace') {
+    const b = sq.targetBuilding;
+    if (b.hp <= 0) { sq.targetBuilding = null; }
+    else {
+      const d = dist(cx, cy, b.x, b.y);
+      if (d < b.radius + 22) {
+        const aliveCount = aliveUnits(sq).length;
+        const dmg = myAtk * aliveCount * dt * 0.35;
+        b.hp -= dmg;
+        if (b.hp <= 0) {
+          destroyBuilding(b);
+          sq.targetBuilding = null;
+          sq.targetPos = null;
+        }
+      }
     }
   }
 }
@@ -1238,11 +1389,17 @@ function renderEventLog() {
 
 // ===================== 입력 =====================
 let mouseDown = false;
+let mouseWorldPos = null; // 빌드 모드 프리뷰용
 canvas.addEventListener('mousedown', e => {
   if (game.ended) return;
   const rect = canvas.getBoundingClientRect();
   const [wx, wy] = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
   if (e.button === 0) {
+    // 빌드 모드: 좌클릭으로 위치 지정
+    if (game.buildMode && ourSide()) {
+      commandSelected(wx, wy, null);
+      return;
+    }
     mouseDown = true;
     game.drag = { x1: wx, y1: wy, x2: wx, y2: wy };
   } else if (e.button === 2) {
@@ -1252,11 +1409,13 @@ canvas.addEventListener('mousedown', e => {
   }
 });
 canvas.addEventListener('mousemove', e => {
-  if (!mouseDown) return;
   const rect = canvas.getBoundingClientRect();
   const [wx, wy] = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  mouseWorldPos = { x: wx, y: wy };
+  if (!mouseDown) return;
   if (game.drag) { game.drag.x2 = wx; game.drag.y2 = wy; }
 });
+canvas.addEventListener('mouseleave', () => { mouseWorldPos = null; });
 canvas.addEventListener('mouseup', e => {
   if (e.button !== 0) return;
   mouseDown = false;
@@ -1294,7 +1453,10 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'Digit1') setSpeed(1);
   else if (e.code === 'Digit2') setSpeed(2);
   else if (e.code === 'Digit4') setSpeed(4);
-  else if (e.code === 'Escape') clearSelection();
+  else if (e.code === 'Escape') {
+    if (game.buildMode) { game.buildMode = null; refreshBuildModeUI(); }
+    clearSelection();
+  }
 });
 
 document.querySelectorAll('#topBar button[data-speed]').forEach(b => {
@@ -1369,10 +1531,12 @@ function restartGame() {
   game.phase = 'peace'; game.peaceLeft = 0; game.warLeft = 0; game.time = 0;
   game.ended = false; game.selectedSquads.clear(); game.drag = null;
   game.recruit = { mode: 'manual' };
+  game.buildMode = null;
   game.eventLog.length = 0;
   Object.assign(blue, makeKingdom('blue', '#4a8fff', 100, H / 2));
   Object.assign(red,  makeKingdom('red',  '#ff4a4a', W - 100, H / 2));
   cities.length = 0; cityIdCounter = 0; squadIdCounter = 0;
+  buildings = []; buildingIdCounter = 0;
   const bc = makeCity(blue.capitalX, blue.capitalY, '청룡성', 'blue');
   const rc = makeCity(red.capitalX,  red.capitalY,  '주작성', 'red');
   bc.isCapital = true; rc.isCapital = true; bc.radius = 45; rc.radius = 45;
@@ -1640,11 +1804,21 @@ function serializeKingdom(k) {
     squads: k.squads.map(sq => ({
       id: sq.id, side: sq.side, type: sq.type, mode: sq.mode,
       targetPos: sq.targetPos, targetCityId: sq.targetCity ? sq.targetCity.id : null,
+      targetBuildingId: sq.targetBuilding ? sq.targetBuilding.id : null,
       garrisonedAtId: sq.garrisonedAt ? sq.garrisonedAt.id : null,
       cohesionX: sq.cohesionX, cohesionY: sq.cohesionY,
+      buildTask: sq.buildTask ? { type: sq.buildTask.type, x: sq.buildTask.x, y: sq.buildTask.y, progress: sq.buildTask.progress } : null,
       units: sq.units.map(u => ({ x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, alive: u.alive })),
     })),
   };
+}
+function serializeBuildings() {
+  return buildings.map(b => ({
+    id: b.id, type: b.type, x: b.x, y: b.y, owner: b.owner,
+    hp: b.hp, maxHp: b.maxHp,
+    constructing: b.constructing, constructProgress: b.constructProgress,
+    radius: b.radius,
+  }));
 }
 function serializeCities() {
   return cities.map(c => ({
@@ -1662,6 +1836,7 @@ function broadcastFullState() {
     blue: serializeKingdom(blue),
     red: serializeKingdom(red),
     cities: serializeCities(),
+    buildings: serializeBuildings(),
     log: game.eventLog.slice(-15),
   });
 }
@@ -1686,8 +1861,10 @@ function applyKingdom(k, data) {
     sq.side = sd.side; sq.type = sd.type; sq.mode = sd.mode;
     sq.targetPos = sd.targetPos;
     sq.targetCity = sd.targetCityId ? cities.find(c => c.id === sd.targetCityId) : null;
+    sq.targetBuilding = sd.targetBuildingId ? buildings.find(b => b.id === sd.targetBuildingId) : null;
     sq.garrisonedAt = sd.garrisonedAtId ? cities.find(c => c.id === sd.garrisonedAtId) : null;
     sq.cohesionX = sd.cohesionX; sq.cohesionY = sd.cohesionY;
+    sq.buildTask = sd.buildTask ? { ...sd.buildTask } : null;
     // units: 직접 교체 (개수 일치 보장)
     sq.units = sd.units.map(u => ({ x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, alive: u.alive, cooldown: 0 }));
     newSquads.push(sq);
@@ -1720,6 +1897,18 @@ function applyFullState(data) {
     c.capturer = cd.capturer; c.captureProgress = cd.captureProgress;
     c.isCapital = cd.isCapital; c.radius = cd.radius;
   }
+  // buildings 동기화 (id 기준)
+  if (data.buildings) {
+    const bmap = new Map(buildings.map(b => [b.id, b]));
+    const newList = [];
+    for (const bd of data.buildings) {
+      let b = bmap.get(bd.id);
+      if (!b) b = { id: bd.id };
+      Object.assign(b, bd);
+      newList.push(b);
+    }
+    buildings = newList;
+  }
   applyKingdom(blue, data.blue);
   applyKingdom(red, data.red);
   // 이벤트 로그: 새 항목만 추가
@@ -1748,6 +1937,15 @@ function handleClientMsg(msg) {
     case 'farmer':     k.farmerRatio = Math.max(0.1, Math.min(0.9, msg.val)); break;
     case 'declareWar': if (game.phase === 'peace') startWar(true); break;
     case 'command':    applyClientCommand(msg); break;
+    case 'build': {
+      const cost = BUILDING_TYPES[msg.buildType] && BUILDING_TYPES[msg.buildType].cost;
+      if (!cost || !canAfford(k, cost)) break;
+      const sq = k.squads.find(s => s.id === msg.squadId && s.type === 'builder');
+      if (!sq) break;
+      payCost(k, cost);
+      sq.buildTask = { type: msg.buildType, x: msg.wx, y: msg.wy, progress: 0 };
+      break;
+    }
   }
 }
 
@@ -1980,6 +2178,22 @@ function buildSidePanel() {
       <div class="recruitGrid" id="recruitGrid"></div>
     </div>
     <div class="section">
+      <h3>건설</h3>
+      <button class="builderBtn" id="recruitBuilderBtn">🔨 <b>빌더 모집</b> <span style="color:#888;font-size:10px">인3 식10 금15 철5</span></button>
+      <div class="buildGrid" id="buildGrid">
+        ${BUILDING_KEYS.map(t => {
+          const def = BUILDING_TYPES[t];
+          return `<button data-build="${t}">
+            <span class="icon">${def.icon}</span>
+            <span class="name">${def.name}</span>
+            <span class="cost">금${def.cost.gold}·철${def.cost.iron}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="buildModeIndicator" id="buildModeIndicator" style="display:none"></div>
+      <div class="buildHint">빌더를 선택 후 건물 종류를 누르고 맵 위치를 클릭하세요. 건물은 점령 불가, 파괴만 됩니다.</div>
+    </div>
+    <div class="section">
       <h3>무기 연구</h3>
       <div id="researchList"></div>
     </div>
@@ -2016,9 +2230,47 @@ function buildSidePanel() {
   document.getElementById('warBtn').addEventListener('click', () => {
     mpDeclareWar();
   });
+  // 빌더 모집
+  document.getElementById('recruitBuilderBtn').addEventListener('click', () => {
+    const k = sides[ourSide()];
+    if (!mpRecruit(k, 'builder', 'manual')) logEvent('자원 부족', k.side);
+    else logEvent('빌더 1명 소환', k.side);
+  });
+  // 건물 선택 (빌드 모드 토글)
+  document.querySelectorAll('#buildGrid [data-build]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.build;
+      if (game.buildMode === t) game.buildMode = null;
+      else {
+        // 빌더가 선택되어 있는지 안내
+        const sel = selectedSquadsList();
+        const hasBuilder = sel.some(sq => sq.side === ourSide() && sq.type === 'builder');
+        if (!hasBuilder) {
+          logEvent('먼저 빌더를 선택하세요', ourSide());
+        }
+        game.buildMode = t;
+      }
+      refreshBuildModeUI();
+    });
+  });
   rebuildRecruitGrid();
   rebuildResearchList();
   buildCounterChart();
+  refreshBuildModeUI();
+}
+
+function refreshBuildModeUI() {
+  const ind = document.getElementById('buildModeIndicator');
+  if (!ind) return;
+  if (game.buildMode) {
+    ind.style.display = 'block';
+    ind.textContent = `▶ ${BUILDING_TYPES[game.buildMode].name} 건설 대기 - 맵을 클릭하세요 (ESC 취소)`;
+  } else {
+    ind.style.display = 'none';
+  }
+  document.querySelectorAll('#buildGrid [data-build]').forEach(b => {
+    b.classList.toggle('active', b.dataset.build === game.buildMode);
+  });
 }
 
 // 병종별 상성 요약 (해당 병종이 어떤 적에게 강한가/약한가)
@@ -2191,8 +2443,15 @@ function render() {
   }
 
   for (const c of cities) drawCity(c);
+  for (const b of buildings) drawBuilding(b);
   for (const sq of [...blue.squads, ...red.squads]) drawSquadIndicator(sq);
   for (const sq of [...blue.squads, ...red.squads]) drawSquadUnits(sq);
+  // 빌더의 건설 작업 위치 미리보기
+  for (const sq of [...blue.squads, ...red.squads]) {
+    if (sq.type === 'builder' && sq.buildTask) drawBuildTaskMarker(sq);
+  }
+  // 빌드 모드 커서 (현재 활성 진영의 마우스 위치)
+  if (game.buildMode && mouseWorldPos) drawBuildPreview(mouseWorldPos.x, mouseWorldPos.y);
 
   if (game.drag) {
     const [x1, y1] = worldToScreen(game.drag.x1, game.drag.y1);
@@ -2213,6 +2472,103 @@ function garrisonAt(city) {
   if (!city.owner) return [];
   const list = sides[city.owner].squads;
   return list.filter(sq => sq.garrisonedAt === city);
+}
+
+function drawBuilding(b) {
+  const [sx, sy] = worldToScreen(b.x, b.y);
+  const scale = canvas.width / W;
+  const r = b.radius * scale;
+  const def = BUILDING_TYPES[b.type];
+  // 본체
+  ctx.fillStyle = b.owner === 'blue' ? '#2a3a5a' : '#5a2a2a';
+  ctx.strokeStyle = b.owner === 'blue' ? '#6cb3ff' : '#ff8585';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.rect(sx - r, sy - r, r * 2, r * 2);
+  ctx.fill(); ctx.stroke();
+  // 액센트 사선 (건설 중 표시)
+  if (b.constructing) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx - r, sy - r, r * 2, r * 2);
+    ctx.clip();
+    ctx.strokeStyle = '#ffd76d';
+    ctx.lineWidth = 1.5;
+    for (let i = -r * 2; i < r * 2; i += 6) {
+      ctx.beginPath(); ctx.moveTo(sx + i, sy - r); ctx.lineTo(sx + i + r * 2, sy + r); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 아이콘
+  ctx.font = `${Math.round(r * 1.3)}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = def.color;
+  ctx.fillText(def.icon, sx, sy);
+  ctx.textBaseline = 'alphabetic';
+  // HP 바
+  if (b.hp < b.maxHp) {
+    const bw = r * 2.2, bh = 3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx - bw / 2, sy - r - 7, bw, bh);
+    ctx.fillStyle = b.hp / b.maxHp > 0.5 ? '#6dd16d' : b.hp / b.maxHp > 0.25 ? '#ffd76d' : '#ff6a6a';
+    ctx.fillRect(sx - bw / 2, sy - r - 7, bw * (b.hp / b.maxHp), bh);
+  }
+  // 건설 진행도
+  if (b.constructing) {
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 5, -Math.PI / 2, -Math.PI / 2 + (b.constructProgress) * Math.PI * 2);
+    ctx.strokeStyle = '#ffd76d';
+    ctx.lineWidth = 3; ctx.stroke();
+  }
+}
+
+function drawBuildTaskMarker(sq) {
+  const t = sq.buildTask;
+  const def = BUILDING_TYPES[t.type];
+  const [sx, sy] = worldToScreen(t.x, t.y);
+  const scale = canvas.width / W;
+  const r = 18 * scale;
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  ctx.strokeStyle = sq.side === 'blue' ? '#6cb3ff' : '#ff8585';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
+  ctx.setLineDash([]);
+  ctx.font = `${Math.round(r * 1.3)}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = def.color;
+  ctx.fillText(def.icon, sx, sy);
+  ctx.textBaseline = 'alphabetic';
+  // 진행도 바
+  const bw = r * 2;
+  const pct = Math.min(1, (t.progress || 0) / def.buildTime);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(sx - bw / 2, sy + r + 4, bw, 3);
+  ctx.fillStyle = '#ffd76d';
+  ctx.fillRect(sx - bw / 2, sy + r + 4, bw * pct, 3);
+  ctx.restore();
+}
+
+function drawBuildPreview(wx, wy) {
+  const [sx, sy] = worldToScreen(wx, wy);
+  const scale = canvas.width / W;
+  const r = 18 * scale;
+  const def = BUILDING_TYPES[game.buildMode];
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = ourSide() === 'blue' ? '#2a3a5a' : '#5a2a2a';
+  ctx.strokeStyle = '#ffd76d';
+  ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+  ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+  ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
+  ctx.setLineDash([]);
+  ctx.font = `${Math.round(r * 1.3)}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = def.color;
+  ctx.fillText(def.icon, sx, sy);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
 }
 
 function drawCity(c) {
