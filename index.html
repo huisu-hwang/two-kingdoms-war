@@ -522,8 +522,8 @@ const UNIT_STATS = {
   rifleman: { hp: 95,  atk: 22, rng: 110, spd: 0.70, radius: 4, cool: 0.7 },
   tank:     { hp: 360, atk: 32, rng: 60,  spd: 0.55, radius: 7, cool: 1.4 },
   fighter:  { hp: 90,  atk: 28, rng: 180, spd: 2.80, radius: 5, cool: 1.5, flying: true },
-  // 민간 - 건물 건설 전용
-  builder:  { hp: 40,  atk: 0,  rng: 0,   spd: 0.55, radius: 4, cool: 999 },
+  // 민간 - 건물 건설 전용 (HP 낮춰서 적 부대 한두 번에 사망)
+  builder:  { hp: 25,  atk: 0,  rng: 0,   spd: 0.55, radius: 4, cool: 999 },
 };
 const UNIT_COST = {
   infantry: { pop: 5,  food: 15, gold: 8,   iron: 14  },
@@ -868,6 +868,13 @@ function commandSelected(wx, wy, target) {
   }
   for (const sq of selectedSquadsList()) {
     if (sq.side !== our) continue;
+    // 빌더는 도시에 주둔하지 않음 (항상 노출되어 사냥 대상이 되도록)
+    if (sq.type === 'builder') {
+      sq.garrisonedAt = null;
+      sq.targetPos = { x: wx, y: wy };
+      sq.targetCity = null;
+      continue;
+    }
     if (target && target.kind === 'city' && target.ref.owner === sq.side) {
       sq.garrisonedAt = target.ref;
       sq.targetPos = { x: target.ref.x, y: target.ref.y };
@@ -978,8 +985,8 @@ function findNearestEnemyUnit(ux, uy, mySide, maxRng) {
   const enemies = mySide === 'blue' ? red.squads : blue.squads;
   let best = null, bestSq = null, bestD = Infinity;
   const baseSq = maxRng * maxRng;
-  // 빌더는 더 큰 사거리로 자동 어그로 (사냥 우선)
-  const builderRng = Math.max(maxRng, 60);
+  // 빌더는 매우 큰 어그로 사거리 (어떤 부대든 빌더 발견 시 즉시 공격)
+  const builderRng = Math.max(maxRng, 150);
   const builderSq = builderRng * builderRng;
   for (const esq of enemies) for (const eu of esq.units) {
     if (!eu.alive) continue;
@@ -1132,8 +1139,8 @@ function tickSquad(sq, dt) {
   // 자동 AI 목표
   if (sq.mode !== 'manual' && !sq.garrisonedAt) {
     if (sq.mode === 'aggressive') {
-      // 최우선: 350px 이내 적 빌더 사냥
-      const builderPos = nearestEnemyBuilderPos(sq.side, cx, cy, 350);
+      // 최우선: 800px 이내 적 빌더 사냥 (매우 적극적)
+      const builderPos = nearestEnemyBuilderPos(sq.side, cx, cy, 800);
       if (builderPos) {
         sq.targetPos = builderPos;
         sq.targetCity = null;
@@ -1163,11 +1170,17 @@ function tickSquad(sq, dt) {
       let threat = null, threatD = 320 * 320;
       // 평화 동안은 위협 탐지 비활성화 (정찰만 하고 가만히 있음)
       if (game.phase !== 'peace') {
-        for (const c of ownedCities(sq.side)) {
-          for (const es of enemySquads) {
-            const [ex, ey] = squadCenter(es);
-            const d = distSq(c.x, c.y, ex, ey);
-            if (d < threatD) { threatD = d; threat = { x: ex, y: ey }; }
+        // 우선: 자기 영토 근처 (450px) 적 빌더 적극 사냥
+        const builderPos = nearestEnemyBuilderPos(sq.side, cx, cy, 450);
+        if (builderPos) {
+          threat = builderPos;
+        } else {
+          for (const c of ownedCities(sq.side)) {
+            for (const es of enemySquads) {
+              const [ex, ey] = squadCenter(es);
+              const d = distSq(c.x, c.y, ex, ey);
+              if (d < threatD) { threatD = d; threat = { x: ex, y: ey }; }
+            }
           }
         }
       }
