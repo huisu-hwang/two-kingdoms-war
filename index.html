@@ -976,11 +976,18 @@ function findNearestEnemyUnit(ux, uy, mySide, maxRng) {
   // 평화 동안은 적과 교전하지 않음
   if (game.phase === 'peace') return null;
   const enemies = mySide === 'blue' ? red.squads : blue.squads;
-  let best = null, bestSq = null, bestD = maxRng * maxRng;
+  let best = null, bestSq = null, bestD = Infinity;
+  const baseSq = maxRng * maxRng;
+  // 빌더는 더 큰 사거리로 자동 어그로 (사냥 우선)
+  const builderRng = Math.max(maxRng, 60);
+  const builderSq = builderRng * builderRng;
   for (const esq of enemies) for (const eu of esq.units) {
     if (!eu.alive) continue;
+    const limitSq = esq.type === 'builder' ? builderSq : baseSq;
     const d = distSq(ux, uy, eu.x, eu.y);
-    if (d < bestD) { bestD = d; best = eu; bestSq = esq; }
+    if (d < limitSq && d < bestD) {
+      bestD = d; best = eu; bestSq = esq;
+    }
   }
   return best ? { unit: best, squad: bestSq } : null;
 }
@@ -1007,6 +1014,7 @@ function inOwnDefenseZone(side, x, y) {
 function tickBuilder(sq, dt) {
   const k = sides[sq.side];
   const spd = uSpd(k, 'builder');
+  let arrivedCount = 0;
   for (const u of sq.units) {
     if (!u.alive) continue;
     if (sq.buildTask) {
@@ -1014,21 +1022,13 @@ function tickBuilder(sq, dt) {
       const d = dist(u.x, u.y, t.x, t.y);
       if (d > 6) {
         const moveDist = spd * dt * 60;
-        if (moveDist >= d) { u.x = t.x; u.y = t.y; }
+        if (moveDist >= d) { u.x = t.x; u.y = t.y; arrivedCount++; }
         else {
           u.x += ((t.x - u.x) / d) * moveDist;
           u.y += ((t.y - u.y) / d) * moveDist;
         }
       } else {
-        t.progress = (t.progress || 0) + dt;
-        const def = BUILDING_TYPES[t.type];
-        if (t.progress >= def.buildTime) {
-          const b = makeBuilding(t.type, t.x, t.y, sq.side);
-          b.constructing = false; b.constructProgress = 1;
-          buildings.push(b);
-          sq.buildTask = null;
-          logEvent(`${def.name} 건설 완료`, sq.side);
-        }
+        arrivedCount++;
       }
     } else if (sq.targetPos) {
       const tp = sq.targetPos;
@@ -1041,6 +1041,19 @@ function tickBuilder(sq, dt) {
           u.y += ((tp.y - u.y) / d) * moveDist;
         }
       }
+    }
+  }
+  // 건설 진행: 도달한 빌더 수에 비례 (3명이면 3배 빠름)
+  if (sq.buildTask && arrivedCount > 0) {
+    const t = sq.buildTask;
+    t.progress = (t.progress || 0) + dt * arrivedCount;
+    const def = BUILDING_TYPES[t.type];
+    if (t.progress >= def.buildTime) {
+      const b = makeBuilding(t.type, t.x, t.y, sq.side);
+      b.constructing = false; b.constructProgress = 1;
+      buildings.push(b);
+      sq.buildTask = null;
+      logEvent(`${def.name} 건설 완료`, sq.side);
     }
   }
 }
