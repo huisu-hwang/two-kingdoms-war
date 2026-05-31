@@ -709,11 +709,11 @@ function makeKingdom(side, color, capX, capY) {
     aiResearchTimer: 12,
     aiCommandTimer: 3,
     bonuses: {
-      atk:    Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
-      hp:     Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
-      rng:    Object.fromEntries(ALL_UNITS.map(t => [t, 0])),
-      atkMul: Object.fromEntries(ALL_UNITS.map(t => [t, 1])),
-      hpMul:  Object.fromEntries(ALL_UNITS.map(t => [t, 1])),
+      atk:    Object.fromEntries([...ALL_UNITS, ...CIVIL_UNITS].map(t => [t, 0])),
+      hp:     Object.fromEntries([...ALL_UNITS, ...CIVIL_UNITS].map(t => [t, 0])),
+      rng:    Object.fromEntries([...ALL_UNITS, ...CIVIL_UNITS].map(t => [t, 0])),
+      atkMul: Object.fromEntries([...ALL_UNITS, ...CIVIL_UNITS].map(t => [t, 1])),
+      hpMul:  Object.fromEntries([...ALL_UNITS, ...CIVIL_UNITS].map(t => [t, 1])),
     },
     research: { done: new Set(), current: null },
     unlocked: new Set(BASIC_UNITS),
@@ -726,9 +726,10 @@ const sides = { blue, red };
 function enemyOf(side) { return side === 'blue' ? red : blue; }
 
 // ===================== 능력치 헬퍼 =====================
-function uHp(k, type)  { const s = UNIT_STATS[type]; return Math.floor((s.hp + k.bonuses.hp[type]) * k.bonuses.hpMul[type]); }
-function uAtk(k, type) { const s = UNIT_STATS[type]; return (s.atk + k.bonuses.atk[type]) * k.bonuses.atkMul[type]; }
-function uRng(k, type) { const s = UNIT_STATS[type]; return s.rng + k.bonuses.rng[type]; }
+// fallback (|| 0, || 1) 으로 ALL_UNITS에 없는 타입(예: builder)도 안전하게 처리
+function uHp(k, type)  { const s = UNIT_STATS[type]; return Math.floor((s.hp + (k.bonuses.hp[type] || 0)) * (k.bonuses.hpMul[type] || 1)); }
+function uAtk(k, type) { const s = UNIT_STATS[type]; return (s.atk + (k.bonuses.atk[type] || 0)) * (k.bonuses.atkMul[type] || 1); }
+function uRng(k, type) { const s = UNIT_STATS[type]; return s.rng + (k.bonuses.rng[type] || 0); }
 function uSpd(k, type) { return UNIT_STATS[type].spd; }
 function uCool(k, type){ return UNIT_STATS[type].cool; }
 
