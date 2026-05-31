@@ -1013,8 +1013,12 @@ function tickBuilder(sq, dt) {
       const t = sq.buildTask;
       const d = dist(u.x, u.y, t.x, t.y);
       if (d > 6) {
-        u.x += ((t.x - u.x) / d) * spd * dt * 60;
-        u.y += ((t.y - u.y) / d) * spd * dt * 60;
+        const moveDist = spd * dt * 60;
+        if (moveDist >= d) { u.x = t.x; u.y = t.y; }
+        else {
+          u.x += ((t.x - u.x) / d) * moveDist;
+          u.y += ((t.y - u.y) / d) * moveDist;
+        }
       } else {
         t.progress = (t.progress || 0) + dt;
         const def = BUILDING_TYPES[t.type];
@@ -1030,8 +1034,12 @@ function tickBuilder(sq, dt) {
       const tp = sq.targetPos;
       const d = dist(u.x, u.y, tp.x, tp.y);
       if (d > 5) {
-        u.x += ((tp.x - u.x) / d) * spd * dt * 60;
-        u.y += ((tp.y - u.y) / d) * spd * dt * 60;
+        const moveDist = spd * dt * 60;
+        if (moveDist >= d) { u.x = tp.x; u.y = tp.y; }
+        else {
+          u.x += ((tp.x - u.x) / d) * moveDist;
+          u.y += ((tp.y - u.y) / d) * moveDist;
+        }
       }
     }
   }
@@ -1054,6 +1062,25 @@ function nearestEnemySquadCenter(side, fromX, fromY) {
   const enemies = side === 'blue' ? red.squads : blue.squads;
   let best = null, bestD = Infinity;
   for (const esq of enemies) {
+    const alive = aliveUnits(esq);
+    if (!alive.length) continue;
+    let sx = 0, sy = 0;
+    for (const u of alive) { sx += u.x; sy += u.y; }
+    sx /= alive.length; sy /= alive.length;
+    const d = distSq(fromX, fromY, sx, sy);
+    if (d < bestD) { bestD = d; best = { x: sx, y: sy }; }
+  }
+  return best;
+}
+
+// 사거리 내 적 빌더 위치 (자동 공격 부대가 우선 사냥)
+function nearestEnemyBuilderPos(side, fromX, fromY, maxDist) {
+  if (game.phase === 'peace') return null;
+  const enemies = side === 'blue' ? red.squads : blue.squads;
+  const maxSq = maxDist * maxDist;
+  let best = null, bestD = maxSq;
+  for (const esq of enemies) {
+    if (esq.type !== 'builder') continue;
     const alive = aliveUnits(esq);
     if (!alive.length) continue;
     let sx = 0, sy = 0;
@@ -1092,23 +1119,30 @@ function tickSquad(sq, dt) {
   // 자동 AI 목표
   if (sq.mode !== 'manual' && !sq.garrisonedAt) {
     if (sq.mode === 'aggressive') {
-      if (!sq.targetCity || sq.targetCity.owner === sq.side) {
-        sq.targetCity = nearestEnemyCity(sq.side, cx, cy);
-      }
-      if (sq.targetCity) {
-        sq.targetPos = { x: sq.targetCity.x, y: sq.targetCity.y };
+      // 최우선: 350px 이내 적 빌더 사냥
+      const builderPos = nearestEnemyBuilderPos(sq.side, cx, cy, 350);
+      if (builderPos) {
+        sq.targetPos = builderPos;
+        sq.targetCity = null;
         sq.targetBuilding = null;
       } else {
-        // 적 도시가 없으면 적 건물 노림 (전쟁 중일 때)
-        if (!sq.targetBuilding || sq.targetBuilding.owner === sq.side || sq.targetBuilding.hp <= 0) {
-          sq.targetBuilding = nearestEnemyBuilding(sq.side, cx, cy);
+        if (!sq.targetCity || sq.targetCity.owner === sq.side) {
+          sq.targetCity = nearestEnemyCity(sq.side, cx, cy);
         }
-        if (sq.targetBuilding) {
-          sq.targetPos = { x: sq.targetBuilding.x, y: sq.targetBuilding.y };
+        if (sq.targetCity) {
+          sq.targetPos = { x: sq.targetCity.x, y: sq.targetCity.y };
+          sq.targetBuilding = null;
         } else {
-          // 적 도시/건물 모두 없으면 가까운 적 부대 추격 (빌더 포함)
-          const ec = nearestEnemySquadCenter(sq.side, cx, cy);
-          if (ec) sq.targetPos = ec;
+          if (!sq.targetBuilding || sq.targetBuilding.owner === sq.side || sq.targetBuilding.hp <= 0) {
+            sq.targetBuilding = nearestEnemyBuilding(sq.side, cx, cy);
+          }
+          if (sq.targetBuilding) {
+            sq.targetPos = { x: sq.targetBuilding.x, y: sq.targetBuilding.y };
+          } else {
+            // 적 도시/건물 모두 없으면 가까운 적 부대 추격 (빌더 포함)
+            const ec = nearestEnemySquadCenter(sq.side, cx, cy);
+            if (ec) sq.targetPos = ec;
+          }
         }
       }
     } else if (sq.mode === 'defensive') {
@@ -1198,8 +1232,14 @@ function tickSquad(sq, dt) {
     }
     const d = dist(u.x, u.y, ttx, tty);
     if (d > 3) {
-      u.x += ((ttx - u.x) / d) * mySpd * dt * 60;
-      u.y += ((tty - u.y) / d) * mySpd * dt * 60;
+      const moveDist = mySpd * dt * 60;
+      if (moveDist >= d) {
+        // 한 프레임에 목표 도달 — 오버슛 방지 (떨림 fix)
+        u.x = ttx; u.y = tty;
+      } else {
+        u.x += ((ttx - u.x) / d) * moveDist;
+        u.y += ((tty - u.y) / d) * moveDist;
+      }
     }
   }
 
