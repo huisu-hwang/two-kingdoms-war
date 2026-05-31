@@ -523,7 +523,7 @@ const UNIT_STATS = {
   tank:     { hp: 360, atk: 32, rng: 60,  spd: 0.55, radius: 7, cool: 1.4 },
   fighter:  { hp: 90,  atk: 28, rng: 180, spd: 2.80, radius: 5, cool: 1.5, flying: true },
   // 민간 - 건물 건설 전용
-  builder:  { hp: 40,  atk: 0,  rng: 0,   spd: 0.80, radius: 4, cool: 999 },
+  builder:  { hp: 40,  atk: 0,  rng: 0,   spd: 0.55, radius: 4, cool: 999 },
 };
 const UNIT_COST = {
   infantry: { pop: 5,  food: 15, gold: 8,   iron: 14  },
@@ -1048,6 +1048,23 @@ function nearestEnemyBuilding(side, fromX, fromY) {
   return best;
 }
 
+// 적 부대(빌더 포함) 중심 위치
+function nearestEnemySquadCenter(side, fromX, fromY) {
+  if (game.phase === 'peace') return null;
+  const enemies = side === 'blue' ? red.squads : blue.squads;
+  let best = null, bestD = Infinity;
+  for (const esq of enemies) {
+    const alive = aliveUnits(esq);
+    if (!alive.length) continue;
+    let sx = 0, sy = 0;
+    for (const u of alive) { sx += u.x; sy += u.y; }
+    sx /= alive.length; sy /= alive.length;
+    const d = distSq(fromX, fromY, sx, sy);
+    if (d < bestD) { bestD = d; best = { x: sx, y: sy }; }
+  }
+  return best;
+}
+
 function tickSquad(sq, dt) {
   const alive = aliveUnits(sq);
   if (!alive.length) return;
@@ -1086,7 +1103,13 @@ function tickSquad(sq, dt) {
         if (!sq.targetBuilding || sq.targetBuilding.owner === sq.side || sq.targetBuilding.hp <= 0) {
           sq.targetBuilding = nearestEnemyBuilding(sq.side, cx, cy);
         }
-        if (sq.targetBuilding) sq.targetPos = { x: sq.targetBuilding.x, y: sq.targetBuilding.y };
+        if (sq.targetBuilding) {
+          sq.targetPos = { x: sq.targetBuilding.x, y: sq.targetBuilding.y };
+        } else {
+          // 적 도시/건물 모두 없으면 가까운 적 부대 추격 (빌더 포함)
+          const ec = nearestEnemySquadCenter(sq.side, cx, cy);
+          if (ec) sq.targetPos = ec;
+        }
       }
     } else if (sq.mode === 'defensive') {
       const enemySquads = sq.side === 'blue' ? red.squads : blue.squads;
